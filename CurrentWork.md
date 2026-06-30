@@ -289,7 +289,9 @@ ProcessedAt = 현재 시각
 - NuGet `packages/`, Visual Studio 산출물, 로컬 `config.json`, 인증서/키, 운영 Excel/첨부/보고서 파일을 `.gitignore`로 제외했다.
 - `README.md`에 실행 준비, 로컬 설정 입력, 빌드 방법, Supabase SQL 적용, 보안 주의사항을 정리했다.
 - `MailSender_v2/Database/supabase_schema.sql`에 초기 테스트용 RLS 정책과 anon role 권한을 추가했다.
-- 루트 `.git` 폴더는 비어 있어 현재 Git 저장소로 인식되지 않는다. Git 초기화, origin 설정, 커밋, push는 별도 승인 후 진행한다.
+- 루트 `.git` 폴더가 비어 있어 Git 저장소로 인식되지 않던 상태를 `git init`으로 초기화했다.
+- origin을 `https://github.com/Ornithopter83/Mailing_V2.git`로 설정하고 `main` 브랜치에 초기 커밋을 push했다.
+- Supabase SQL 실제 적용은 프로젝트 키/접속 권한이 필요하므로 로컬 SQL 파일 준비까지만 완료했다.
 
 ## task 문서 사용 방식
 
