@@ -1,0 +1,45 @@
+# Visual Studio / build outputs
+.vs/
+**/.vs/
+bin/
+obj/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet packages are restored from packages.config
+packages/
+**/packages/
+
+# Local configuration and secrets
+config.json
+**/config.json
+**/bin/config.json
+**/bin/Debug/config.json
+**/bin/Release/config.json
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Operational input/output data
+*.xlsx
+*.xls
+*.csv
+*.tsv
+Report_*.txt
+MailDraft_*.json
+UploadResult_*.txt
+UploadResult_*.xlsx
+
+# Runtime attachments/assets copied from operations
+*.pdf
+signature.png
+title.png
+
+# Legacy/reference projects are not part of the public v2 repository
+NaraEmailSender/
+NaraInfoCollectorBot/
