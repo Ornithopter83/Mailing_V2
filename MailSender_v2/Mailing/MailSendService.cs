@@ -71,6 +71,37 @@ namespace MailSender_v2.Mailing
             return results;
         }
 
+        public async Task SendResultReportToSenderAsync(
+            IReadOnlyList<MailSendResult> results,
+            MailDraft draft,
+            AppSettings settings,
+            Action<string> log,
+            CancellationToken cancellationToken)
+        {
+            if (results == null || results.Count == 0)
+            {
+                return;
+            }
+
+            if (settings == null ||
+                string.IsNullOrWhiteSpace(settings.SmtpHost) ||
+                string.IsNullOrWhiteSpace(settings.SmtpUser) ||
+                string.IsNullOrWhiteSpace(settings.SmtpPw))
+            {
+                throw new InvalidOperationException("SMTP 설정이 비어 있습니다. config.json의 SmtpHost, SmtpUser, SmtpPw를 확인하세요.");
+            }
+
+            using (var client = new SmtpClient(settings.SmtpHost, settings.SmtpPort))
+            using (var message = CreateResultReportMessage(results, draft, settings.SmtpUser))
+            {
+                client.EnableSsl = settings.SmtpEnableSsl;
+                client.Credentials = new NetworkCredential(settings.SmtpUser, settings.SmtpPw);
+                log?.Invoke("[SMTP] 발송 결과 보고 메일 전송 시작");
+                await client.SendMailAsync(message).ConfigureAwait(false);
+                log?.Invoke("[SMTP] 발송 결과 보고 메일 전송 완료");
+            }
+        }
+
         public static string SaveReport(IEnumerable<MailSendResult> results, string directory)
         {
             Directory.CreateDirectory(directory);
@@ -110,6 +141,56 @@ namespace MailSender_v2.Mailing
             AddInlineImages(message, draft.Images);
 
             return message;
+        }
+
+        private static MailMessage CreateResultReportMessage(IReadOnlyList<MailSendResult> results, MailDraft draft, string sender)
+        {
+            var message = new MailMessage();
+            message.From = new MailAddress(sender);
+            message.To.Add(sender);
+            message.Subject = $"발송 결과 보고 - {draft.Subject}";
+            message.Body = CreateResultReportHtml(results, draft);
+            message.IsBodyHtml = true;
+            AddInlineImages(message, draft.Images);
+            return message;
+        }
+
+        private static string CreateResultReportHtml(IReadOnlyList<MailSendResult> results, MailDraft draft)
+        {
+            var successCount = results.Count(item => item.IsSuccess);
+            var failureCount = results.Count - successCount;
+            var builder = new StringBuilder();
+            builder.AppendLine("<!doctype html>");
+            builder.AppendLine("<html><head><meta charset=\"utf-8\">");
+            builder.AppendLine("<style>");
+            builder.AppendLine("body{font-family:'Malgun Gothic','맑은 고딕',Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;}");
+            builder.AppendLine("table{border-collapse:collapse;width:100%;margin:12px 0 24px 0;}");
+            builder.AppendLine("th,td{border:1px solid #d8dce3;padding:8px;text-align:left;}");
+            builder.AppendLine("th{background:#f6f8fb;}");
+            builder.AppendLine(".ok{color:#0b7a2a;font-weight:600;}.fail{color:#c62828;font-weight:600;}");
+            builder.AppendLine("</style></head><body>");
+            builder.AppendLine("<h2>발송 결과 보고</h2>");
+            builder.AppendLine($"<p>제목: {WebUtility.HtmlEncode(draft.Subject ?? "")}<br>");
+            builder.AppendLine($"전체: {results.Count:N0}건 / 성공: {successCount:N0}건 / 실패: {failureCount:N0}건</p>");
+            builder.AppendLine("<table><thead><tr><th>대상 이메일</th><th>발송성공여부</th><th>메시지</th></tr></thead><tbody>");
+            foreach (var result in results)
+            {
+                var status = result.IsSuccess ? "성공" : "실패";
+                var css = result.IsSuccess ? "ok" : "fail";
+                builder.AppendLine("<tr>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(result.Recipient?.Email ?? "")}</td>");
+                builder.AppendLine($"<td class=\"{css}\">{status}</td>");
+                builder.AppendLine($"<td>{WebUtility.HtmlEncode(result.Message ?? "")}</td>");
+                builder.AppendLine("</tr>");
+            }
+
+            builder.AppendLine("</tbody></table>");
+            builder.AppendLine("<h3>이미지 포함 발송본문</h3>");
+            builder.AppendLine("<div>");
+            builder.AppendLine(ConvertBodyToHtml(draft.GetBodyText(), draft.Images));
+            builder.AppendLine("</div>");
+            builder.AppendLine("</body></html>");
+            return builder.ToString();
         }
 
         private static IEnumerable<string> SplitAddresses(string value)

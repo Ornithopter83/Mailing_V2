@@ -643,9 +643,9 @@ namespace MailSender_v2
 
             var sortGroup = new GroupBox { Text = "공고일자 정렬", Dock = DockStyle.Fill };
             var sortPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
-            _sortDescRadio = new RadioButton { Text = "내림차순", Checked = true, Width = 90 };
+            _sortDescRadio = new RadioButton { Text = "내림차순", Checked = false, Width = 90 };
             sortPanel.Controls.Add(_sortDescRadio);
-            sortPanel.Controls.Add(new RadioButton { Text = "오름차순", Width = 90 });
+            sortPanel.Controls.Add(new RadioButton { Text = "오름차순", Checked = true, Width = 90 });
             sortGroup.Controls.Add(sortPanel);
 
             var countPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
@@ -1152,11 +1152,13 @@ namespace MailSender_v2
             {
                 var service = new MailSendService();
                 var results = new List<MailSendResult>();
+                var dbResults = new List<MailSendResult>();
 
                 if (selected.Count > 0)
                 {
                     AppendSendLog($"[SMTP] DB 조회 대상 발송 시작: {selected.Count:N0}건");
-                    results.AddRange(await service.SendAsync(selected, draft, _settings, AppendSendLog, CancellationToken.None));
+                    dbResults = await service.SendAsync(selected, draft, _settings, AppendSendLog, CancellationToken.None);
+                    results.AddRange(dbResults);
                 }
 
                 if (manualRecipients.Count > 0)
@@ -1189,6 +1191,12 @@ namespace MailSender_v2
 
                 var reportPath = MailSendService.SaveReport(results, AppDomain.CurrentDomain.BaseDirectory);
                 AppendSendLog($"[SMTP] 텍스트 보고서 생성: {reportPath}");
+                if (dbResults.Count > 0)
+                {
+                    await service.SendResultReportToSenderAsync(dbResults, draft, _settings, AppendSendLog, CancellationToken.None);
+                }
+
+                ClearRecipientList();
                 MessageBox.Show("발송 처리가 완료되었습니다.", "발송 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -1564,6 +1572,14 @@ img {{ max-width: 100%; height: auto; }}
             }
 
             UpdateSelectedCount();
+        }
+
+        private void ClearRecipientList()
+        {
+            _recipientRows.Clear();
+            _recipientGrid.Rows.Clear();
+            UpdateSelectedCount();
+            _statusLabel.Text = "상태: 발송 완료 (대상 목록 초기화)";
         }
 
         private void UpdateSelectedCount()

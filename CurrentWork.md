@@ -349,6 +349,13 @@ ProcessedAt = 현재 시각
 - `SendHistory` anon delete 권한과 RLS policy를 `supabase_schema.sql`에 반영했다.
 - `Recipients`, `BlockedEmails`, `UploadHistory`는 초기화 대상에서 제외한다.
 
+### 2026-07-01 발송 결과 SMTP 사용자 보고
+
+- DB 조회 대상에게 SMTP 발송을 1건 이상 시도한 경우, `SmtpUser`에게 결과 보고 메일을 보내도록 했다.
+- 보고 메일에는 대상 이메일, 발송 성공 여부, 메시지, 성공/실패 집계, 이미지 포함 발송본문을 포함한다.
+- 수동 입력 대상만 발송한 경우에는 보고 메일을 보내지 않는다.
+- 보고 메일은 운영자 확인용이며 `SendHistory`에는 별도 기록하지 않는다.
+
 ## task 문서 사용 방식
 
 앞으로 명령이나 작업 추가는 `tasks/00_TEMPLATE.md` 형식을 따른다.

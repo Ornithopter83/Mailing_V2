@@ -138,7 +138,7 @@
     <Compile Include="Data\SupabaseTableCheckResult.cs" />
     <Compile Include="Data\SupabaseUploadRepository.cs" />
     <Compile Include="MainForm.cs">
-      <SubType>Code</SubType>
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="Mailing\MailDraft.cs" />
     <Compile Include="Mailing\MailSendResult.cs" />
