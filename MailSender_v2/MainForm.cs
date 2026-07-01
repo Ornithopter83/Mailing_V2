@@ -16,7 +16,7 @@ using Newtonsoft.Json;
 
 namespace MailSender_v2
 {
-    public class MainForm : Form
+    public partial class MainForm : Form
     {
         private readonly TextBox _uploadLogTextBox = new TextBox();
         private readonly TextBox _uploadFilePathTextBox = new TextBox();
@@ -55,18 +55,22 @@ namespace MailSender_v2
         public MainForm()
         {
             InitializeComponent();
+            BuildRuntimeLayout();
         }
 
         private void InitializeComponent()
         {
-            SuspendLayout();
-
             Text = "입찰공고 메일링 시스템";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(1280, 760);
             Size = new Size(1360, 820);
             Font = new Font("맑은 고딕", 9F, FontStyle.Regular, GraphicsUnit.Point);
             Load += MainForm_Load;
+        }
+
+        private void BuildRuntimeLayout()
+        {
+            SuspendLayout();
 
             var root = new TableLayoutPanel
             {

@@ -312,6 +312,7 @@ ProcessedAt = 현재 시각
 - Visual Studio가 `MainForm.cs`를 다시 Form Designer 대상으로 인식하여 `InitializeComponent` 파싱 오류가 재발했다.
 - `MainForm.cs`는 Designer 호환 코드가 아니라 코드 기반 UI이므로 `MailSender_v2.csproj`에서 `<SubType>Code</SubType>`로 명시했다.
 - 이 파일은 Designer가 아니라 코드 편집기로 여는 것이 기준이다. 시각적 Designer 편집이 필요하면 `MainForm.Designer.cs` 기반으로 UI를 별도 재구성해야 한다.
+- 그래도 Designer가 `InitializeComponent()`를 파싱하려는 경우를 대비해 `InitializeComponent()`는 제목/크기 등 단순 설정만 수행하게 만들고, 실제 UI 구성은 `BuildRuntimeLayout()`로 분리했다.
 
 ## task 문서 사용 방식
 
