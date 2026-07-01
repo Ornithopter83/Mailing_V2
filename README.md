@@ -28,11 +28,12 @@ Excel 업로드 -> Supabase DB 반영 -> 발송 대상 조회 -> SMTP 발송 또
     "Url": "https://zogwawbwtxkogmgdvskb.supabase.co",
     "AnonKey": ""
   },
+  "SmtpUser": "",
+  "SmtpPw": "",
   "SmtpHost": "smtps.hiworks.com",
   "SmtpPort": 587,
   "SmtpEnableSsl": true,
-  "SmtpUser": "",
-  "SmtpPw": "",
+  "Subject": "입찰공고 안내드립니다",
   "SendInterval": 2000,
   "MaxCount": 100
 }
@@ -53,6 +54,14 @@ NuGet 패키지는 `MailSender_v2/packages.config` 기준으로 복원합니다.
 ## Supabase
 
 초기 테스트 단계에서는 anon key로 앱 기본 기능이 동작하도록 RLS 정책을 완화합니다. 운영 전에는 사용자 인증, 제한 정책, 삭제/수정 권한 축소를 별도 task로 강화해야 합니다.
+
+Supabase anon key 확인 위치:
+
+1. Supabase Dashboard에서 프로젝트를 엽니다.
+2. `Project Settings` 또는 `Settings`로 이동합니다.
+3. `API Keys` 메뉴를 엽니다.
+4. 현재 코드에서는 `Legacy API Keys`의 `anon` key를 `Supabase.AnonKey`에 입력합니다.
+5. `service_role` 또는 secret key는 데스크톱 앱에 입력하지 않습니다.
 
 필수 테이블:
 

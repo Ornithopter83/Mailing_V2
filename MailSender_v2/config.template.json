@@ -1,0 +1,14 @@
+{
+  "Supabase": {
+    "Url": "https://zogwawbwtxkogmgdvskb.supabase.co",
+    "AnonKey": ""
+  },
+  "SmtpUser": "",
+  "SmtpPw": "",
+  "SmtpHost": "smtps.hiworks.com",
+  "SmtpPort": 587,
+  "SmtpEnableSsl": true,
+  "Subject": "입찰공고 안내드립니다",
+  "SendInterval": 2000,
+  "MaxCount": 100
+}

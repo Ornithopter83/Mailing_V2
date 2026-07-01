@@ -7,12 +7,12 @@ namespace MailSender_v2.Config
     internal sealed class AppSettings
     {
         public SupabaseSettings Supabase { get; set; } = new SupabaseSettings();
-        public string SmtpUser { get; set; }
-        public string SmtpPw { get; set; }
+        public string SmtpUser { get; set; } = "";
+        public string SmtpPw { get; set; } = "";
         public string SmtpHost { get; set; } = "smtps.hiworks.com";
         public int SmtpPort { get; set; } = 587;
         public bool SmtpEnableSsl { get; set; } = true;
-        public string Subject { get; set; }
+        public string Subject { get; set; } = "입찰공고 안내드립니다";
         public int SendInterval { get; set; } = 2000;
         public int MaxCount { get; set; } = 100;
 
@@ -28,6 +28,17 @@ namespace MailSender_v2.Config
             var json = File.ReadAllText(configPath);
             var loaded = JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
             loaded.Supabase = loaded.Supabase ?? new SupabaseSettings();
+            loaded.SmtpUser = loaded.SmtpUser ?? "";
+            loaded.SmtpPw = loaded.SmtpPw ?? "";
+            loaded.SmtpHost = string.IsNullOrWhiteSpace(loaded.SmtpHost) ? "smtps.hiworks.com" : loaded.SmtpHost;
+            loaded.Subject = string.IsNullOrWhiteSpace(loaded.Subject) ? "입찰공고 안내드립니다" : loaded.Subject;
+            loaded.SendInterval = loaded.SendInterval <= 0 ? 2000 : loaded.SendInterval;
+            loaded.MaxCount = loaded.MaxCount <= 0 ? 100 : loaded.MaxCount;
+            if (loaded.SmtpPort <= 0)
+            {
+                loaded.SmtpPort = 587;
+            }
+
             return loaded;
         }
 
@@ -45,7 +56,7 @@ namespace MailSender_v2.Config
 
     internal sealed class SupabaseSettings
     {
-        public string Url { get; set; } = "";
+        public string Url { get; set; } = "https://zogwawbwtxkogmgdvskb.supabase.co";
         public string AnonKey { get; set; } = "";
 
         [JsonIgnore]

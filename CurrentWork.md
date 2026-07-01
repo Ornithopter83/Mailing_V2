@@ -293,6 +293,13 @@ ProcessedAt = 현재 시각
 - origin을 `https://github.com/Ornithopter83/Mailing_V2.git`로 설정하고 `main` 브랜치에 초기 커밋을 push했다.
 - Supabase SQL 실제 적용은 프로젝트 키/접속 권한이 필요하므로 로컬 SQL 파일 준비까지만 완료했다.
 
+### 2026-07-01 MainForm 열기 및 config 기본값 보정
+
+- `MainForm.cs`는 코드 기반 UI로 작성되어 있으므로 Visual Studio Designer가 파싱하지 않도록 `MailSender_v2.csproj`에서 `<SubType>Form</SubType>`를 제거했다.
+- `AppSettings` 기본값을 보강하여 새 `config.json` 생성 시 Supabase URL, SMTP 기본 서버, 제목, 발송 간격, 최대 건수가 누락되지 않도록 했다.
+- 복사용 `MailSender_v2/config.template.json`을 추가했다.
+- README에 Supabase anon key 확인 위치를 정리했다.
+
 ## task 문서 사용 방식
 
 앞으로 명령이나 작업 추가는 `tasks/00_TEMPLATE.md` 형식을 따른다.
