@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Mail;
 using System.Text;
 using System.Threading;
@@ -34,9 +35,11 @@ namespace MailSender_v2
         private readonly List<RecipientListItem> _recipientRows = new List<RecipientListItem>();
         private readonly List<string> _activityLogs = new List<string>();
         private readonly List<string> _attachmentPaths = new List<string>();
+        private readonly List<MailImageSetting> _mailImages = new List<MailImageSetting>();
         private Button _uploadStartButton;
         private Button _saveTextButton;
         private Button _saveExcelButton;
+        private Button _resetSendHistoryButton;
         private Button _queryRecipientsButton;
         private Button _manualCompleteButton;
         private Button _sendButton;
@@ -56,6 +59,7 @@ namespace MailSender_v2
         public MainForm()
         {
             _settings = AppSettings.LoadOrCreate(_configPath);
+            _mailImages.AddRange(_settings.Images ?? Enumerable.Empty<MailImageSetting>());
             InitializeComponent();
             BuildRuntimeLayout();
         }
@@ -63,6 +67,7 @@ namespace MailSender_v2
         private void InitializeComponent()
         {
             Text = "입찰공고 메일링 시스템";
+            Icon = LoadApplicationIcon();
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(1280, 760);
             Size = new Size(1360, 820);
@@ -150,6 +155,11 @@ namespace MailSender_v2
                 _statusLabel.Text = result.IsSuccessful
                     ? "상태: Supabase 연결 확인 완료"
                     : "상태: Supabase 연결 확인 실패";
+
+                if (result.IsSuccessful)
+                {
+                    await LoadDashboardSummaryAsync();
+                }
             }
             catch (Exception ex)
             {
@@ -238,6 +248,7 @@ namespace MailSender_v2
             using (var textBox = new TextBox())
             {
                 form.Text = "로그";
+                form.Icon = Icon;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.Size = new Size(560, 360);
                 textBox.Dock = DockStyle.Fill;
@@ -252,7 +263,7 @@ namespace MailSender_v2
 
         private TabPage CreateUploadTab()
         {
-            var page = new TabPage("1. 목록 추가 (입찰공고 파일 업로드)");
+            var page = new TabPage("1. 발송 현황");
 
             var layout = new TableLayoutPanel
             {
@@ -280,7 +291,7 @@ namespace MailSender_v2
 
         private GroupBox CreateExcelUploadGroup()
         {
-            var group = CreateGroupBox("1. 엑셀 파일 업로드");
+            var group = CreateGroupBox("1. 목록 추가 (엑셀 파일 업로드)");
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -336,7 +347,7 @@ namespace MailSender_v2
 
         private GroupBox CreateUploadResultGroup()
         {
-            var group = CreateGroupBox("2. 업로드 상세 결과");
+            var group = CreateGroupBox("2. 발송 현황 요약");
             _uploadResultGrid.Dock = DockStyle.Fill;
             _uploadResultGrid.AllowUserToAddRows = false;
             _uploadResultGrid.AllowUserToDeleteRows = false;
@@ -345,13 +356,11 @@ namespace MailSender_v2
             _uploadResultGrid.RowHeadersVisible = false;
             _uploadResultGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
 
-            _uploadResultGrid.Columns.Add("Category", "구분");
-            _uploadResultGrid.Columns.Add("Description", "설명");
+            _uploadResultGrid.Columns.Add("Category", "항목");
             _uploadResultGrid.Columns.Add("Count", "건수");
-            _uploadResultGrid.Columns.Add("Status", "상태");
-            _uploadResultGrid.Columns.Add("Memo", "비고");
+            _uploadResultGrid.Columns.Add("Memo", "기준");
 
-            UpdateUploadResultGrid(new UploadProcessResult());
+            UpdateDashboardSummaryGrid(null);
 
             group.Controls.Add(_uploadResultGrid);
             return group;
@@ -398,12 +407,12 @@ namespace MailSender_v2
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 3,
                 Padding = new Padding(12),
             };
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 3; i++)
             {
-                layout.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+                layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
             }
 
             _saveTextButton = new Button { Text = "결과 텍스트 저장", Dock = DockStyle.Fill, Enabled = false };
@@ -414,10 +423,9 @@ namespace MailSender_v2
 
             layout.Controls.Add(_saveTextButton, 0, 0);
             layout.Controls.Add(_saveExcelButton, 0, 1);
-            layout.Controls.Add(new Button { Text = "DB 초기화", Dock = DockStyle.Fill }, 0, 2);
-            var logButton = new Button { Text = "로그 보기", Dock = DockStyle.Fill };
-            logButton.Click += (sender, args) => ShowLogWindow();
-            layout.Controls.Add(logButton, 0, 3);
+            _resetSendHistoryButton = new Button { Text = "전체 발송현황 초기화", Dock = DockStyle.Fill };
+            _resetSendHistoryButton.Click += async (sender, args) => await ResetSendHistoryAsync();
+            layout.Controls.Add(_resetSendHistoryButton, 0, 2);
 
             group.Controls.Add(layout);
             return group;
@@ -547,7 +555,7 @@ namespace MailSender_v2
             _bodyTextBox = new RichTextBox
             {
                 Dock = DockStyle.Fill,
-                Text = _settings.DefaultBodyText,
+                Text = _settings.BodyText,
                 BorderStyle = BorderStyle.FixedSingle,
             };
 
@@ -566,6 +574,11 @@ namespace MailSender_v2
             };
             _attachmentListView.Columns.Add("파일명", 300);
             _attachmentListView.Columns.Add("크기", 100, HorizontalAlignment.Right);
+            foreach (var fileName in _settings.Download ?? new List<string>())
+            {
+                AddAttachment(fileName);
+            }
+
             return _attachmentListView;
         }
 
@@ -743,6 +756,18 @@ namespace MailSender_v2
             }
         }
 
+        private static Icon LoadApplicationIcon()
+        {
+            try
+            {
+                return Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+            }
+            catch
+            {
+                return SystemIcons.Application;
+            }
+        }
+
         private async Task StartUploadAsync()
         {
             var filePath = _uploadFilePathTextBox.Text.Trim();
@@ -805,7 +830,14 @@ namespace MailSender_v2
                 }
 
                 UpdateUploadInfo(result);
-                UpdateUploadResultGrid(result);
+                if (canUploadToSupabase)
+                {
+                    await LoadDashboardSummaryAsync();
+                }
+                else
+                {
+                    UpdateDashboardSummaryGrid(null);
+                }
                 _saveTextButton.Enabled = true;
                 _saveExcelButton.Enabled = true;
                 _statusLabel.Text = canUploadToSupabase ? "상태: 업로드 완료" : "상태: 파일 처리 완료 (Supabase 미설정)";
@@ -879,6 +911,11 @@ namespace MailSender_v2
                 _uploadStartButton.Enabled = !isBusy;
             }
 
+            if (_resetSendHistoryButton != null)
+            {
+                _resetSendHistoryButton.Enabled = !isBusy;
+            }
+
             _statusLabel.Text = isBusy ? "상태: 업로드 처리 중" : _statusLabel.Text;
         }
 
@@ -891,12 +928,84 @@ namespace MailSender_v2
             _uploadInfoRowCountValueLabel.Text = result.TotalRows.ToString("N0");
         }
 
-        private void UpdateUploadResultGrid(UploadProcessResult result)
+        private void UpdateDashboardSummaryGrid(DashboardSummary summary)
         {
             _uploadResultGrid.Rows.Clear();
-            foreach (var row in result.CreateSummaryRows())
+            if (summary == null)
             {
-                _uploadResultGrid.Rows.Add(row.Category, row.Description, row.Count.ToString("N0"), row.Status, row.Memo);
+                _uploadResultGrid.Rows.Add("차단된 메일", "-", "BlockedEmails 전체");
+                _uploadResultGrid.Rows.Add("총 수신자", "-", "Recipients 전체");
+                _uploadResultGrid.Rows.Add("발송된 수신자", "-", "SendHistory Sent/ManuallyMarkedSent 고유 이메일");
+                return;
+            }
+
+            _uploadResultGrid.Rows.Add("차단된 메일", summary.BlockedEmailCount.ToString("N0"), "BlockedEmails 전체");
+            _uploadResultGrid.Rows.Add("총 수신자", summary.RecipientCount.ToString("N0"), "Recipients 전체");
+            _uploadResultGrid.Rows.Add("발송된 수신자", summary.SentRecipientCount.ToString("N0"), "SendHistory Sent/ManuallyMarkedSent 고유 이메일");
+        }
+
+        private async Task LoadDashboardSummaryAsync()
+        {
+            _settings = AppSettings.LoadOrCreate(_configPath);
+            if (!_settings.Supabase.IsConfigured)
+            {
+                UpdateDashboardSummaryGrid(null);
+                AppendUploadLog("[발송현황] Supabase 설정이 없어 현황을 조회하지 않았습니다.");
+                return;
+            }
+
+            try
+            {
+                var repository = new SupabaseRecipientRepository(_settings.Supabase);
+                var summary = await repository.GetDashboardSummaryAsync(CancellationToken.None);
+                UpdateDashboardSummaryGrid(summary);
+                AppendUploadLog("[발송현황] 요약 조회 완료");
+            }
+            catch (Exception ex)
+            {
+                UpdateDashboardSummaryGrid(null);
+                AppendUploadLog($"[발송현황 오류] {ex.Message}");
+            }
+        }
+
+        private async Task ResetSendHistoryAsync()
+        {
+            _settings = AppSettings.LoadOrCreate(_configPath);
+            if (!_settings.Supabase.IsConfigured)
+            {
+                MessageBox.Show("Supabase 설정이 필요합니다.", "설정 확인", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show(
+                "발송 이력 전체 삭제를 실행합니다.\n\n이 작업은 복구할 수 없습니다.\n수신자 목록과 차단 목록, 업로드 이력은 유지됩니다.\n\n계속하시겠습니까?",
+                "전체 발송현황 초기화 확인",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+
+            SetUploadBusy(true);
+            try
+            {
+                var repository = new SupabaseRecipientRepository(_settings.Supabase);
+                await repository.DeleteAllSendHistoryAsync(CancellationToken.None);
+                AppendUploadLog("[발송현황] SendHistory 전체 삭제 완료");
+                await LoadDashboardSummaryAsync();
+                _statusLabel.Text = "상태: 전체 발송현황 초기화 완료";
+                MessageBox.Show("전체 발송현황 초기화가 완료되었습니다.", "초기화 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _statusLabel.Text = "상태: 전체 발송현황 초기화 오류";
+                AppendUploadLog($"[발송현황 초기화 오류] {ex.Message}");
+                MessageBox.Show($"전체 발송현황 초기화 중 오류가 발생했습니다.\n\n{ex.Message}", "초기화 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                SetUploadBusy(false);
             }
         }
 
@@ -993,7 +1102,6 @@ namespace MailSender_v2
                 var repository = new SupabaseRecipientRepository(_settings.Supabase);
                 await repository.InsertSendHistoriesAsync(histories, CancellationToken.None);
                 AppendSendLog($"[수동완료] {selected.Count:N0}건 발송완료 처리");
-                await LoadRecipientsAsync();
             }
             catch (Exception ex)
             {
@@ -1082,11 +1190,6 @@ namespace MailSender_v2
                 var reportPath = MailSendService.SaveReport(results, AppDomain.CurrentDomain.BaseDirectory);
                 AppendSendLog($"[SMTP] 텍스트 보고서 생성: {reportPath}");
                 MessageBox.Show("발송 처리가 완료되었습니다.", "발송 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
-                if (_excludeSentCheckBox.Checked)
-                {
-                    await LoadRecipientsAsync();
-                }
             }
             catch (Exception ex)
             {
@@ -1168,14 +1271,93 @@ namespace MailSender_v2
             var preview = new StringBuilder();
             var selected = DistinctRecipients(GetSelectedRecipients());
             var manualRecipients = CreateManualRecipients(draft.DefaultTo, selected);
-            preview.AppendLine($"수동 수신자: {manualRecipients.Count:N0}건");
-            preview.AppendLine($"DB 선택 대상: {selected.Count:N0}건");
-            preview.AppendLine($"제목: {draft.Subject}");
+            preview.AppendLine($"수동 수신자: {manualRecipients.Count:N0}건 / DB 선택 대상: {selected.Count:N0}건");
             preview.AppendLine($"참조: {draft.DefaultCc}");
             preview.AppendLine($"첨부: {draft.AttachmentPaths.Count:N0}개");
-            preview.AppendLine();
-            preview.AppendLine(draft.DefaultBodyText);
-            MessageBox.Show(preview.ToString(), "메일 미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ShowHtmlPreview(draft, preview.ToString());
+        }
+
+        private void ShowHtmlPreview(MailDraft draft, string summary)
+        {
+            using (var form = new Form())
+            using (var browser = new WebBrowser())
+            {
+                form.Text = "메일 미리보기";
+                form.Icon = Icon;
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.Size = new Size(900, 760);
+                form.MinimizeBox = false;
+                form.MaximizeBox = true;
+
+                browser.Dock = DockStyle.Fill;
+                browser.AllowWebBrowserDrop = false;
+                browser.IsWebBrowserContextMenuEnabled = false;
+                browser.WebBrowserShortcutsEnabled = false;
+                browser.DocumentText = CreatePreviewHtml(draft, summary);
+
+                form.Controls.Add(browser);
+                form.ShowDialog(this);
+            }
+        }
+
+        private static string CreatePreviewHtml(MailDraft draft, string summary)
+        {
+            var bodyHtml = ConvertBodyToPreviewHtml(draft.GetBodyText(), draft.Images);
+            return $@"<!doctype html>
+<html>
+<head>
+<meta http-equiv=""X-UA-Compatible"" content=""IE=edge"" />
+<meta charset=""utf-8"" />
+<style>
+body {{ margin: 0; padding: 24px; font-family: 'Malgun Gothic', '맑은 고딕', Arial, sans-serif; font-size: 14px; color: #222; background: #fff; }}
+.summary {{ margin-bottom: 20px; padding: 12px 14px; border: 1px solid #d8dce3; background: #f6f8fb; line-height: 1.6; white-space: pre-wrap; }}
+.subject {{ margin-bottom: 16px; font-size: 18px; font-weight: 700; }}
+.body {{ line-height: 1.7; }}
+img {{ max-width: 100%; height: auto; }}
+.missing {{ display: inline-block; padding: 6px 8px; border: 1px solid #c62828; color: #c62828; background: #fff5f5; }}
+</style>
+</head>
+<body>
+<div class=""summary"">{WebUtility.HtmlEncode(summary)}</div>
+<div class=""subject"">{WebUtility.HtmlEncode(draft.Subject ?? "")}</div>
+<div class=""body"">{bodyHtml}</div>
+</body>
+</html>";
+        }
+
+        private static string ConvertBodyToPreviewHtml(string text, IEnumerable<MailImageSetting> images)
+        {
+            var html = WebUtility.HtmlEncode(text ?? "")
+                .Replace("\r\n", "\n")
+                .Replace("\n", "<br>");
+
+            foreach (var image in images ?? Enumerable.Empty<MailImageSetting>())
+            {
+                if (string.IsNullOrWhiteSpace(image.Id))
+                {
+                    continue;
+                }
+
+                var token = "{" + WebUtility.HtmlEncode(image.Id) + "}";
+                var path = ResolveRuntimePath(image.FileName);
+                var replacement = File.Exists(path)
+                    ? CreatePreviewImageTag(path, image)
+                    : $"<span class=\"missing\">이미지 없음: {WebUtility.HtmlEncode(image.FileName ?? image.Id)}</span>";
+                html = html.Replace(token, replacement);
+            }
+
+            return html;
+        }
+
+        private static string CreatePreviewImageTag(string path, MailImageSetting image)
+        {
+            var width = "";
+            if (int.TryParse(image.Width, out var parsedWidth) && parsedWidth > 0)
+            {
+                width = $" width=\"{parsedWidth}\"";
+            }
+
+            return $"<img src=\"{new Uri(path).AbsoluteUri}\" alt=\"{WebUtility.HtmlEncode(image.Id)}\"{width}>";
         }
 
         private void AddAttachmentButton_Click(object sender, EventArgs e)
@@ -1262,14 +1444,31 @@ namespace MailSender_v2
                 }
             }
 
+            foreach (var image in _mailImages)
+            {
+                if (string.IsNullOrWhiteSpace(image.FileName))
+                {
+                    continue;
+                }
+
+                var imagePath = ResolveRuntimePath(image.FileName);
+                if (!File.Exists(imagePath))
+                {
+                    message = $"본문 이미지 파일이 존재하지 않습니다: {image.FileName}";
+                    return false;
+                }
+            }
+
             draft = new MailDraft
             {
                 DefaultTo = to,
                 DefaultCc = cc,
                 Subject = subject,
-                DefaultBodyText = _bodyTextBox?.Text ?? "",
+                Images = _mailImages.ToList(),
+                Download = (_settings.Download ?? new List<string>()).ToList(),
                 AttachmentPaths = _attachmentPaths.ToList(),
             };
+            draft.SetBodyText(_bodyTextBox?.Text ?? "");
             message = null;
             return true;
         }
@@ -1279,16 +1478,19 @@ namespace MailSender_v2
             _toTextBox.Text = draft.DefaultTo ?? "";
             _ccTextBox.Text = draft.DefaultCc ?? "";
             _subjectTextBox.Text = string.IsNullOrWhiteSpace(draft.Subject) ? _settings.Subject : draft.Subject;
-            _bodyTextBox.Text = string.IsNullOrWhiteSpace(draft.DefaultBodyText) ? _settings.DefaultBodyText : draft.DefaultBodyText;
+            var bodyText = draft.GetBodyText();
+            _bodyTextBox.Text = string.IsNullOrWhiteSpace(bodyText) ? _settings.BodyText : bodyText;
+            _mailImages.Clear();
+            _mailImages.AddRange(draft.Images ?? new List<MailImageSetting>());
 
             _attachmentPaths.Clear();
             _attachmentListView.Items.Clear();
-            foreach (var path in draft.AttachmentPaths ?? new List<string>())
+            var paths = new List<string>();
+            paths.AddRange(draft.AttachmentPaths ?? new List<string>());
+            paths.AddRange(draft.Download ?? new List<string>());
+            foreach (var path in paths)
             {
-                if (File.Exists(path))
-                {
-                    AddAttachment(path);
-                }
+                AddAttachment(path);
             }
         }
 
@@ -1384,16 +1586,31 @@ namespace MailSender_v2
 
         private void AddAttachment(string filePath)
         {
-            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath) || _attachmentPaths.Contains(filePath))
+            var resolvedPath = ResolveRuntimePath(filePath);
+            if (string.IsNullOrWhiteSpace(resolvedPath) ||
+                !File.Exists(resolvedPath) ||
+                _attachmentPaths.Contains(resolvedPath, StringComparer.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            _attachmentPaths.Add(filePath);
-            var info = new FileInfo(filePath);
-            var item = new ListViewItem(new[] { info.Name, $"{Math.Max(1, info.Length / 1024):N0} KB" }) { Tag = filePath };
+            _attachmentPaths.Add(resolvedPath);
+            var info = new FileInfo(resolvedPath);
+            var item = new ListViewItem(new[] { info.Name, $"{Math.Max(1, info.Length / 1024):N0} KB" }) { Tag = resolvedPath };
             _attachmentListView.Items.Add(item);
             AppendSendLog($"[첨부] 추가: {info.Name}");
+        }
+
+        private static string ResolveRuntimePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return "";
+            }
+
+            return Path.IsPathRooted(path)
+                ? path
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
         }
 
         private static IEnumerable<string> SplitMailAddresses(string value)

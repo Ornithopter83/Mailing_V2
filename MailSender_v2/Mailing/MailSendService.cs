@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -93,7 +94,7 @@ namespace MailSender_v2.Mailing
             message.From = new MailAddress(sender);
             message.To.Add(recipient.Email);
             message.Subject = draft.Subject;
-            message.Body = ConvertBodyToHtml(draft.DefaultBodyText);
+            message.Body = ConvertBodyToHtml(draft.GetBodyText(), draft.Images);
             message.IsBodyHtml = true;
 
             foreach (var cc in SplitAddresses(draft.DefaultCc))
@@ -106,6 +107,8 @@ namespace MailSender_v2.Mailing
                 message.Attachments.Add(new Attachment(attachmentPath));
             }
 
+            AddInlineImages(message, draft.Images);
+
             return message;
         }
 
@@ -117,10 +120,91 @@ namespace MailSender_v2.Mailing
                 .Where(item => item.Length > 0);
         }
 
-        private static string ConvertBodyToHtml(string text)
+        private static string ConvertBodyToHtml(string text, IEnumerable<MailImageSetting> images)
         {
             var encoded = WebUtility.HtmlEncode(text ?? "");
-            return encoded.Replace("\r\n", "\n").Replace("\n", "<br>");
+            var html = encoded.Replace("\r\n", "\n").Replace("\n", "<br>");
+
+            foreach (var image in images ?? Enumerable.Empty<MailImageSetting>())
+            {
+                if (string.IsNullOrWhiteSpace(image.Id))
+                {
+                    continue;
+                }
+
+                var width = "";
+                if (int.TryParse(image.Width, out var parsedWidth) && parsedWidth > 0)
+                {
+                    width = $" width=\"{parsedWidth}\"";
+                }
+
+                html = html.Replace(
+                    "{" + WebUtility.HtmlEncode(image.Id) + "}",
+                    $"<img src=\"cid:{WebUtility.HtmlEncode(image.Id)}\"{width}>");
+            }
+
+            return html;
+        }
+
+        private static void AddInlineImages(MailMessage message, IEnumerable<MailImageSetting> images)
+        {
+            var imageList = (images ?? Enumerable.Empty<MailImageSetting>())
+                .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.FileName))
+                .ToList();
+            if (imageList.Count == 0)
+            {
+                return;
+            }
+
+            var view = AlternateView.CreateAlternateViewFromString(message.Body, Encoding.UTF8, MediaTypeNames.Text.Html);
+            var hasResource = false;
+            foreach (var image in imageList)
+            {
+                var path = ResolveRuntimePath(image.FileName);
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                var resource = new LinkedResource(path)
+                {
+                    ContentId = image.Id,
+                    TransferEncoding = TransferEncoding.Base64,
+                };
+                resource.ContentType.MediaType = GetImageMediaType(path);
+                view.LinkedResources.Add(resource);
+                hasResource = true;
+            }
+
+            if (hasResource)
+            {
+                message.AlternateViews.Add(view);
+            }
+            else
+            {
+                view.Dispose();
+            }
+        }
+
+        private static string ResolveRuntimePath(string path)
+        {
+            return Path.IsPathRooted(path)
+                ? path
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
+        }
+
+        private static string GetImageMediaType(string path)
+        {
+            switch (Path.GetExtension(path)?.ToLowerInvariant())
+            {
+                case ".jpg":
+                case ".jpeg":
+                    return MediaTypeNames.Image.Jpeg;
+                case ".gif":
+                    return MediaTypeNames.Image.Gif;
+                default:
+                    return "image/png";
+            }
         }
     }
 }

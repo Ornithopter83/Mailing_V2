@@ -36,7 +36,14 @@ Excel 업로드 -> Supabase DB 반영 -> 발송 대상 조회 -> SMTP 발송 또
   "Subject": "입찰공고 안내드립니다",
   "DefaultTo": "",
   "DefaultCc": "",
-  "DefaultBodyText": "안녕하세요.\r\n\r\n아래와 같이 입찰공고를 안내드립니다.\r\n감사합니다.",
+  "Body": [
+    "안녕하세요.",
+    "",
+    "아래와 같이 입찰공고를 안내드립니다.",
+    "감사합니다."
+  ],
+  "Images": [],
+  "Download": [],
   "SendInterval": 5000,
   "MaxCount": 100
 }
@@ -53,6 +60,8 @@ Excel 업로드 -> Supabase DB 반영 -> 발송 대상 조회 -> SMTP 발송 또
 ```
 
 NuGet 패키지는 `MailSender_v2/packages.config` 기준으로 복원합니다.
+
+빌드 출력은 WinForms 실행 파일(`WinExe`)이며, 실행 시 별도 콘솔 창을 표시하지 않습니다. 실행 파일, 작업 표시줄, 앱 내부 보조 창 아이콘은 `MailSender_v2/nara-email.ico`를 기준으로 사용합니다.
 
 ## Supabase
 

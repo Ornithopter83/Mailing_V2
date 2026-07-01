@@ -61,7 +61,7 @@ alter table "BlockedEmails" enable row level security;
 
 grant select, insert, update on table "Recipients" to anon;
 grant select, insert on table "UploadHistory" to anon;
-grant select, insert on table "SendHistory" to anon;
+grant select, insert, delete on table "SendHistory" to anon;
 grant select on table "BlockedEmails" to anon;
 
 grant usage, select on sequence "Recipients_Id_seq" to anon;
@@ -118,6 +118,13 @@ on "SendHistory"
 for insert
 to anon
 with check (true);
+
+drop policy if exists "SendHistory anon delete" on "SendHistory";
+create policy "SendHistory anon delete"
+on "SendHistory"
+for delete
+to anon
+using (true);
 
 drop policy if exists "BlockedEmails anon select" on "BlockedEmails";
 create policy "BlockedEmails anon select"

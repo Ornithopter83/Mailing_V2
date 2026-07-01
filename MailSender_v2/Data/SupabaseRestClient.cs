@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -102,6 +103,37 @@ namespace MailSender_v2.Data
             }
         }
 
+        public async Task<int> GetCountAsync(string tableName, CancellationToken cancellationToken)
+        {
+            EnsureConfigured();
+
+            var requestUri = $"{_settings.NormalizedUrl}/rest/v1/{tableName}?select=Id";
+            using (var request = CreateRequest(HttpMethod.Get, requestUri))
+            {
+                request.Headers.TryAddWithoutValidation("Prefer", "count=exact");
+                request.Headers.Range = new RangeHeaderValue(0, 0);
+                using (var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+                {
+                    var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    EnsureSuccess(response, body, tableName);
+
+                    IEnumerable<string> values;
+                    if (response.Content.Headers.TryGetValues("Content-Range", out values))
+                    {
+                        var contentRange = values.FirstOrDefault();
+                        var slashIndex = contentRange?.LastIndexOf('/') ?? -1;
+                        if (slashIndex >= 0 &&
+                            int.TryParse(contentRange.Substring(slashIndex + 1), out var count))
+                        {
+                            return count;
+                        }
+                    }
+
+                    return JArray.Parse(body).Count;
+                }
+            }
+        }
+
         public async Task UpsertAsync<T>(string tableName, string conflictColumn, IEnumerable<T> items, CancellationToken cancellationToken)
         {
             EnsureConfigured();
@@ -148,6 +180,23 @@ namespace MailSender_v2.Data
             {
                 request.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                using (var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+                {
+                    var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    EnsureSuccess(response, body, tableName);
+                }
+            }
+        }
+
+        public async Task DeleteAsync(string tableName, string queryString, CancellationToken cancellationToken)
+        {
+            EnsureConfigured();
+
+            var separator = string.IsNullOrWhiteSpace(queryString) ? "" : "?" + queryString.TrimStart('?');
+            var requestUri = $"{_settings.NormalizedUrl}/rest/v1/{tableName}{separator}";
+            using (var request = CreateRequest(HttpMethod.Delete, requestUri))
+            {
+                request.Headers.TryAddWithoutValidation("Prefer", "return=minimal");
                 using (var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
                 {
                     var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);

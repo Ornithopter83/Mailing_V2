@@ -71,9 +71,31 @@ namespace MailSender_v2.Data
             }
         }
 
+        public async Task<DashboardSummary> GetDashboardSummaryAsync(CancellationToken cancellationToken)
+        {
+            using (var client = new SupabaseRestClient(_settings))
+            {
+                var sentEmails = await GetSentEmailsAsync(client, cancellationToken).ConfigureAwait(false);
+                return new DashboardSummary
+                {
+                    BlockedEmailCount = await client.GetCountAsync("BlockedEmails", cancellationToken).ConfigureAwait(false),
+                    RecipientCount = await client.GetCountAsync("Recipients", cancellationToken).ConfigureAwait(false),
+                    SentRecipientCount = sentEmails.Count,
+                };
+            }
+        }
+
+        public async Task DeleteAllSendHistoryAsync(CancellationToken cancellationToken)
+        {
+            using (var client = new SupabaseRestClient(_settings))
+            {
+                await client.DeleteAsync("SendHistory", "Id=not.is.null", cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         private static async Task<HashSet<string>> GetSentEmailsAsync(SupabaseRestClient client, CancellationToken cancellationToken)
         {
-            var array = await client.GetArrayAsync("SendHistory", "select=Email,Status", cancellationToken).ConfigureAwait(false);
+            var array = await client.GetArrayAsync("SendHistory", "select=Email,Status&limit=100000", cancellationToken).ConfigureAwait(false);
             var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in array)
             {

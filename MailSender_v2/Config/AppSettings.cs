@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace MailSender_v2.Config
@@ -15,9 +17,16 @@ namespace MailSender_v2.Config
         public string Subject { get; set; } = "입찰공고 안내드립니다";
         public string DefaultTo { get; set; } = "";
         public string DefaultCc { get; set; } = "";
-        public string DefaultBodyText { get; set; } = "안녕하세요.\r\n\r\n아래와 같이 입찰공고를 안내드립니다.\r\n감사합니다.";
+        public List<string> Body { get; set; } = CreateDefaultBodyLines();
+        public List<MailImageSetting> Images { get; set; } = new List<MailImageSetting>();
+        public List<string> Download { get; set; } = new List<string>();
         public int SendInterval { get; set; } = 5000;
         public int MaxCount { get; set; } = 100;
+
+        [JsonIgnore]
+        public string BodyText => Body != null && Body.Count > 0
+            ? string.Join(Environment.NewLine, Body)
+            : "";
 
         public static AppSettings LoadOrCreate(string configPath)
         {
@@ -37,9 +46,14 @@ namespace MailSender_v2.Config
             loaded.Subject = string.IsNullOrWhiteSpace(loaded.Subject) ? "입찰공고 안내드립니다" : loaded.Subject;
             loaded.DefaultTo = loaded.DefaultTo ?? "";
             loaded.DefaultCc = loaded.DefaultCc ?? "";
-            loaded.DefaultBodyText = string.IsNullOrWhiteSpace(loaded.DefaultBodyText)
-                ? "안녕하세요.\r\n\r\n아래와 같이 입찰공고를 안내드립니다.\r\n감사합니다."
-                : loaded.DefaultBodyText;
+            loaded.Body = loaded.Body ?? new List<string>();
+            if (loaded.Body.Count == 0)
+            {
+                loaded.Body = CreateDefaultBodyLines();
+            }
+
+            loaded.Images = loaded.Images ?? new List<MailImageSetting>();
+            loaded.Download = loaded.Download ?? new List<string>();
             loaded.SendInterval = loaded.SendInterval <= 0 ? 5000 : loaded.SendInterval;
             loaded.MaxCount = loaded.MaxCount <= 0 ? 100 : loaded.MaxCount;
             if (loaded.SmtpPort <= 0)
@@ -60,6 +74,25 @@ namespace MailSender_v2.Config
 
             File.WriteAllText(configPath, JsonConvert.SerializeObject(this, Formatting.Indented));
         }
+
+        private static List<string> CreateDefaultBodyLines()
+        {
+            return new List<string>
+            {
+                "안녕하세요.",
+                "",
+                "아래와 같이 입찰공고를 안내드립니다.",
+                "감사합니다.",
+            };
+        }
+    }
+
+    internal sealed class MailImageSetting
+    {
+        [JsonProperty("ID")]
+        public string Id { get; set; }
+        public string FileName { get; set; }
+        public string Width { get; set; }
     }
 
     internal sealed class SupabaseSettings

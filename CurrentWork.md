@@ -318,18 +318,36 @@ ProcessedAt = 현재 시각
 
 - 앱 시작 시 `config.json`을 먼저 읽고 메일 작성 화면을 구성하도록 했다.
 - `config.json`의 `Subject` 값을 제목 TextBox 초기값으로 반영한다.
-- `DefaultCc`, `DefaultBodyText` 설정을 추가하고 참조/본문 기본값에 반영한다.
+- `DefaultCc`, `Body` 설정을 추가하고 참조/본문 기본값에 반영한다.
 - SMTP 서버, 계정, 비밀번호, SSL, 포트, 발송 간격은 기존처럼 실제 발송 시 `config.json`에서 다시 읽어 사용한다.
 - `config.template.json`과 README 예시도 새 설정 항목에 맞게 갱신했다.
 
 ### 2026-07-01 수신자 수동 설정 및 본문 기본 완성
 
 - 메일 작성 영역에 `수신` 입력을 추가하고 입력 순서를 `수신 -> 참조 -> 제목 -> 본문` 기준으로 정리했다.
-- `DefaultTo`, `DefaultCc`, `Subject`, `DefaultBodyText` 설정이 메일 작성 화면 초기값으로 반영되도록 했다.
+- `DefaultTo`, `DefaultCc`, `Subject`, `Body` 설정이 메일 작성 화면 초기값으로 반영되도록 했다.
 - `임시저장`은 JSON 저장 대화상자를 사용하고, `불러오기` 버튼으로 JSON 메일 설정을 복원할 수 있게 했다.
 - 수신/참조 입력은 세미콜론 기준으로 분리하고 이메일 형식을 검사한다.
 - DB 조회 대상과 수동 입력 대상의 발송 흐름을 분리하여 DB 대상 발송 후 수동 대상이 마지막에 발송되도록 했다.
 - 같은 발송 작업 내 중복 이메일은 1회만 처리한다.
+
+### 2026-07-01 config 본문 배열 및 이미지/첨부 설정 반영
+
+- 메일 본문 기본값은 `Body` 배열만 사용하도록 정리했다.
+- `Body` 배열의 각 항목은 한 줄로 처리하고, 빈 문자열은 빈 줄로 유지한다.
+- `Images` 설정의 `ID`/`FileName`/`Width`를 읽어 본문 `{ID}` 토큰을 SMTP CID 이미지로 변환하도록 했다.
+- `Download` 설정의 파일은 실행 폴더 기준 상대 경로 또는 절대 경로로 첨부 목록에 자동 반영한다.
+- 본문 설정은 `Body` 배열 기준으로만 유지한다.
+- `MainForm.cs`는 코드 기반 UI이므로 `MailSender_v2.csproj`에서 `SubType`을 `Code`로 유지한다.
+
+### 2026-07-01 목록 추가 탭을 발송 현황 대시보드로 변경
+
+- 첫 번째 탭 명칭을 `1. 발송 현황`으로 변경했다.
+- 기존 업로드 상세 결과 표를 Supabase 기준 발송 현황 요약 표로 바꿨다.
+- 발송 현황 요약은 `차단된 메일`, `총 수신자`, `발송된 수신자` 3개 항목을 표시한다.
+- `전체 발송현황 초기화`는 장기 이력 관리가 아니라 발송 대상 재파악을 위한 기능으로 보고 `SendHistory` 전체 삭제로 구현한다.
+- `SendHistory` anon delete 권한과 RLS policy를 `supabase_schema.sql`에 반영했다.
+- `Recipients`, `BlockedEmails`, `UploadHistory`는 초기화 대상에서 제외한다.
 
 ## task 문서 사용 방식
 
