@@ -307,6 +307,12 @@ ProcessedAt = 현재 시각
 - README에 legacy `anon` key와 publishable key 모두 입력 가능하되 `service_role`, `secret`, `sb_secret_...` key는 사용하지 말라는 안내를 추가했다.
 - `MailSender_v2.csproj`에 다시 들어간 `MainForm.cs`의 `<SubType>Form</SubType>`를 제거하여 코드 기반 폼 열기 오류 재발을 막았다.
 
+### 2026-07-01 MainForm Designer 열기 오류 재보정
+
+- Visual Studio가 `MainForm.cs`를 다시 Form Designer 대상으로 인식하여 `InitializeComponent` 파싱 오류가 재발했다.
+- `MainForm.cs`는 Designer 호환 코드가 아니라 코드 기반 UI이므로 `MailSender_v2.csproj`에서 `<SubType>Code</SubType>`로 명시했다.
+- 이 파일은 Designer가 아니라 코드 편집기로 여는 것이 기준이다. 시각적 Designer 편집이 필요하면 `MainForm.Designer.cs` 기반으로 UI를 별도 재구성해야 한다.
+
 ## task 문서 사용 방식
 
 앞으로 명령이나 작업 추가는 `tasks/00_TEMPLATE.md` 형식을 따른다.
