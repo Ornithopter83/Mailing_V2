@@ -93,10 +93,10 @@ namespace MailSender_v2.Mailing
             message.From = new MailAddress(sender);
             message.To.Add(recipient.Email);
             message.Subject = draft.Subject;
-            message.Body = ConvertBodyToHtml(draft.BodyText);
+            message.Body = ConvertBodyToHtml(draft.DefaultBodyText);
             message.IsBodyHtml = true;
 
-            foreach (var cc in SplitAddresses(draft.Cc))
+            foreach (var cc in SplitAddresses(draft.DefaultCc))
             {
                 message.CC.Add(cc);
             }
@@ -112,7 +112,7 @@ namespace MailSender_v2.Mailing
         private static IEnumerable<string> SplitAddresses(string value)
         {
             return (value ?? "")
-                .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(item => item.Trim())
                 .Where(item => item.Length > 0);
         }

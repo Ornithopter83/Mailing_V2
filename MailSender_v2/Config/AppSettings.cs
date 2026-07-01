@@ -13,9 +13,10 @@ namespace MailSender_v2.Config
         public int SmtpPort { get; set; } = 587;
         public bool SmtpEnableSsl { get; set; } = true;
         public string Subject { get; set; } = "입찰공고 안내드립니다";
+        public string DefaultTo { get; set; } = "";
         public string DefaultCc { get; set; } = "";
         public string DefaultBodyText { get; set; } = "안녕하세요.\r\n\r\n아래와 같이 입찰공고를 안내드립니다.\r\n감사합니다.";
-        public int SendInterval { get; set; } = 2000;
+        public int SendInterval { get; set; } = 5000;
         public int MaxCount { get; set; } = 100;
 
         public static AppSettings LoadOrCreate(string configPath)
@@ -34,11 +35,12 @@ namespace MailSender_v2.Config
             loaded.SmtpPw = loaded.SmtpPw ?? "";
             loaded.SmtpHost = string.IsNullOrWhiteSpace(loaded.SmtpHost) ? "smtps.hiworks.com" : loaded.SmtpHost;
             loaded.Subject = string.IsNullOrWhiteSpace(loaded.Subject) ? "입찰공고 안내드립니다" : loaded.Subject;
+            loaded.DefaultTo = loaded.DefaultTo ?? "";
             loaded.DefaultCc = loaded.DefaultCc ?? "";
             loaded.DefaultBodyText = string.IsNullOrWhiteSpace(loaded.DefaultBodyText)
                 ? "안녕하세요.\r\n\r\n아래와 같이 입찰공고를 안내드립니다.\r\n감사합니다."
                 : loaded.DefaultBodyText;
-            loaded.SendInterval = loaded.SendInterval <= 0 ? 2000 : loaded.SendInterval;
+            loaded.SendInterval = loaded.SendInterval <= 0 ? 5000 : loaded.SendInterval;
             loaded.MaxCount = loaded.MaxCount <= 0 ? 100 : loaded.MaxCount;
             if (loaded.SmtpPort <= 0)
             {

@@ -40,6 +40,7 @@ namespace MailSender_v2
         private Button _queryRecipientsButton;
         private Button _manualCompleteButton;
         private Button _sendButton;
+        private TextBox _toTextBox;
         private TextBox _subjectTextBox;
         private TextBox _ccTextBox;
         private RichTextBox _bodyTextBox;
@@ -449,7 +450,7 @@ namespace MailSender_v2
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
-                RowCount = 6,
+                RowCount = 7,
                 Padding = new Padding(12),
             };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
@@ -457,14 +458,15 @@ namespace MailSender_v2
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 55F));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 12F));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
 
-            layout.Controls.Add(CreateLabel("제목"), 0, 0);
-            _subjectTextBox = new TextBox { Dock = DockStyle.Fill, Text = _settings.Subject };
-            layout.Controls.Add(_subjectTextBox, 1, 0);
+            layout.Controls.Add(CreateLabel("수신"), 0, 0);
+            _toTextBox = new TextBox { Dock = DockStyle.Fill, Text = _settings.DefaultTo };
+            layout.Controls.Add(_toTextBox, 1, 0);
             layout.SetColumnSpan(layout.GetControlFromPosition(1, 0), 2);
 
             layout.Controls.Add(CreateLabel("참조"), 0, 1);
@@ -472,14 +474,19 @@ namespace MailSender_v2
             layout.Controls.Add(_ccTextBox, 1, 1);
             layout.SetColumnSpan(layout.GetControlFromPosition(1, 1), 2);
 
-            layout.Controls.Add(CreateLabel("본문"), 0, 2);
+            layout.Controls.Add(CreateLabel("제목"), 0, 2);
+            _subjectTextBox = new TextBox { Dock = DockStyle.Fill, Text = _settings.Subject };
+            layout.Controls.Add(_subjectTextBox, 1, 2);
+            layout.SetColumnSpan(layout.GetControlFromPosition(1, 2), 2);
+
+            layout.Controls.Add(CreateLabel("본문"), 0, 3);
             var bodyPanel = CreateBodyEditorPanel();
-            layout.Controls.Add(bodyPanel, 1, 2);
+            layout.Controls.Add(bodyPanel, 1, 3);
             layout.SetColumnSpan(bodyPanel, 2);
 
-            layout.Controls.Add(CreateLabel("첨부 파일"), 0, 3);
-            layout.Controls.Add(CreateAttachmentPanel(), 1, 3);
-            layout.Controls.Add(CreateAttachmentButtonsPanel(), 2, 3);
+            layout.Controls.Add(CreateLabel("첨부 파일"), 0, 4);
+            layout.Controls.Add(CreateAttachmentPanel(), 1, 4);
+            layout.Controls.Add(CreateAttachmentButtonsPanel(), 2, 4);
 
             var bottomPanel = new FlowLayoutPanel
             {
@@ -489,14 +496,17 @@ namespace MailSender_v2
             };
             var draftButton = new Button { Text = "임시저장", Width = 120, Height = 36 };
             draftButton.Click += SaveDraftButton_Click;
+            var loadButton = new Button { Text = "불러오기", Width = 120, Height = 36 };
+            loadButton.Click += LoadDraftButton_Click;
             var previewButton = new Button { Text = "미리보기", Width = 120, Height = 36 };
             previewButton.Click += PreviewButton_Click;
             _sendButton = new Button { Text = "발송하기", Width = 150, Height = 36, BackColor = Color.FromArgb(0, 102, 204), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
             _sendButton.Click += async (sender, args) => await SendMailAsync();
             bottomPanel.Controls.Add(draftButton);
+            bottomPanel.Controls.Add(loadButton);
             bottomPanel.Controls.Add(previewButton);
             bottomPanel.Controls.Add(_sendButton);
-            layout.Controls.Add(bottomPanel, 1, 5);
+            layout.Controls.Add(bottomPanel, 1, 6);
             layout.SetColumnSpan(bottomPanel, 2);
 
             group.Controls.Add(layout);
@@ -998,22 +1008,23 @@ namespace MailSender_v2
 
         private async Task SendMailAsync()
         {
-            var selected = GetSelectedRecipients();
-            if (selected.Count == 0)
-            {
-                MessageBox.Show("발송 대상을 선택하세요.", "대상 없음", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
             if (!TryCreateDraft(out var draft, out var validationMessage))
             {
                 MessageBox.Show(validationMessage, "메일 작성 확인", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
+            var selected = DistinctRecipients(GetSelectedRecipients());
+            var manualRecipients = CreateManualRecipients(draft.DefaultTo, selected);
+            if (selected.Count + manualRecipients.Count == 0)
+            {
+                MessageBox.Show("DB 조회 대상 또는 수동 수신자를 1명 이상 지정하세요.", "대상 없음", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             _settings = AppSettings.LoadOrCreate(_configPath);
             var confirm = MessageBox.Show(
-                $"{selected.Count:N0}건의 메일을 실제 SMTP로 발송하시겠습니까?",
+                $"DB 선택 대상 {selected.Count:N0}건, 수동 수신자 {manualRecipients.Count:N0}건의 메일을 실제 SMTP로 발송하시겠습니까?",
                 "SMTP 발송 확인",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -1032,7 +1043,20 @@ namespace MailSender_v2
             try
             {
                 var service = new MailSendService();
-                var results = await service.SendAsync(selected, draft, _settings, AppendSendLog, CancellationToken.None);
+                var results = new List<MailSendResult>();
+
+                if (selected.Count > 0)
+                {
+                    AppendSendLog($"[SMTP] DB 조회 대상 발송 시작: {selected.Count:N0}건");
+                    results.AddRange(await service.SendAsync(selected, draft, _settings, AppendSendLog, CancellationToken.None));
+                }
+
+                if (manualRecipients.Count > 0)
+                {
+                    AppendSendLog($"[SMTP] 수동 입력 대상 발송 시작: {manualRecipients.Count:N0}건");
+                    results.AddRange(await service.SendAsync(manualRecipients, draft, _settings, AppendSendLog, CancellationToken.None));
+                }
+
                 var histories = results.Select(result => new SendHistoryDto
                 {
                     RecipientId = result.Recipient.Id > 0 ? result.Recipient.Id : (long?)null,
@@ -1087,10 +1111,50 @@ namespace MailSender_v2
                 return;
             }
 
-            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"MailDraft_{DateTime.Now:yyMMdd-HHmm}.json");
-            File.WriteAllText(path, JsonConvert.SerializeObject(draft, Formatting.Indented), Encoding.UTF8);
-            AppendSendLog($"[임시저장] {path}");
-            MessageBox.Show("임시저장되었습니다.", "임시저장", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Filter = "JSON Files (*.json)|*.json";
+                dialog.FileName = $"MailDraft_{DateTime.Now:yyMMdd-HHmm}.json";
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                File.WriteAllText(dialog.FileName, JsonConvert.SerializeObject(draft, Formatting.Indented), Encoding.UTF8);
+                AppendSendLog($"[임시저장] {dialog.FileName}");
+                MessageBox.Show("임시저장되었습니다.", "임시저장", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void LoadDraftButton_Click(object sender, EventArgs e)
+        {
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Filter = "JSON Files (*.json)|*.json";
+                dialog.Title = "메일 설정 불러오기";
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                try
+                {
+                    var json = File.ReadAllText(dialog.FileName);
+                    var draft = JsonConvert.DeserializeObject<MailDraft>(json);
+                    if (draft == null)
+                    {
+                        MessageBox.Show("불러올 수 있는 메일 설정이 없습니다.", "불러오기", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    ApplyDraftToEditor(draft);
+                    AppendSendLog($"[불러오기] {dialog.FileName}");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"메일 설정을 불러오는 중 오류가 발생했습니다.\n\n{ex.Message}", "불러오기 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
         }
 
         private void PreviewButton_Click(object sender, EventArgs e)
@@ -1102,11 +1166,15 @@ namespace MailSender_v2
             }
 
             var preview = new StringBuilder();
+            var selected = DistinctRecipients(GetSelectedRecipients());
+            var manualRecipients = CreateManualRecipients(draft.DefaultTo, selected);
+            preview.AppendLine($"수동 수신자: {manualRecipients.Count:N0}건");
+            preview.AppendLine($"DB 선택 대상: {selected.Count:N0}건");
             preview.AppendLine($"제목: {draft.Subject}");
-            preview.AppendLine($"참조: {draft.Cc}");
+            preview.AppendLine($"참조: {draft.DefaultCc}");
             preview.AppendLine($"첨부: {draft.AttachmentPaths.Count:N0}개");
             preview.AppendLine();
-            preview.AppendLine(draft.BodyText);
+            preview.AppendLine(draft.DefaultBodyText);
             MessageBox.Show(preview.ToString(), "메일 미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -1158,6 +1226,16 @@ namespace MailSender_v2
         private bool TryCreateDraft(out MailDraft draft, out string message)
         {
             draft = null;
+            var to = (_toTextBox?.Text ?? "").Trim();
+            foreach (var address in SplitMailAddresses(to))
+            {
+                if (!IsValidMailAddress(address))
+                {
+                    message = $"수신 이메일 형식이 올바르지 않습니다: {address}";
+                    return false;
+                }
+            }
+
             var subject = (_subjectTextBox?.Text ?? "").Trim();
             if (string.IsNullOrWhiteSpace(subject))
             {
@@ -1186,13 +1264,32 @@ namespace MailSender_v2
 
             draft = new MailDraft
             {
+                DefaultTo = to,
+                DefaultCc = cc,
                 Subject = subject,
-                Cc = cc,
-                BodyText = _bodyTextBox?.Text ?? "",
+                DefaultBodyText = _bodyTextBox?.Text ?? "",
                 AttachmentPaths = _attachmentPaths.ToList(),
             };
             message = null;
             return true;
+        }
+
+        private void ApplyDraftToEditor(MailDraft draft)
+        {
+            _toTextBox.Text = draft.DefaultTo ?? "";
+            _ccTextBox.Text = draft.DefaultCc ?? "";
+            _subjectTextBox.Text = string.IsNullOrWhiteSpace(draft.Subject) ? _settings.Subject : draft.Subject;
+            _bodyTextBox.Text = string.IsNullOrWhiteSpace(draft.DefaultBodyText) ? _settings.DefaultBodyText : draft.DefaultBodyText;
+
+            _attachmentPaths.Clear();
+            _attachmentListView.Items.Clear();
+            foreach (var path in draft.AttachmentPaths ?? new List<string>())
+            {
+                if (File.Exists(path))
+                {
+                    AddAttachment(path);
+                }
+            }
         }
 
         private List<RecipientListItem> GetSelectedRecipients()
@@ -1208,6 +1305,53 @@ namespace MailSender_v2
             }
 
             return selected;
+        }
+
+        private static List<RecipientListItem> DistinctRecipients(IEnumerable<RecipientListItem> recipients)
+        {
+            var result = new List<RecipientListItem>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var recipient in recipients ?? Enumerable.Empty<RecipientListItem>())
+            {
+                var email = NormalizeEmail(recipient.Email);
+                if (string.IsNullOrWhiteSpace(email) || !seen.Add(email))
+                {
+                    continue;
+                }
+
+                result.Add(recipient);
+            }
+
+            return result;
+        }
+
+        private static List<RecipientListItem> CreateManualRecipients(string value, IEnumerable<RecipientListItem> alreadySelected)
+        {
+            var seen = new HashSet<string>(
+                (alreadySelected ?? Enumerable.Empty<RecipientListItem>())
+                    .Select(item => NormalizeEmail(item.Email))
+                    .Where(item => !string.IsNullOrWhiteSpace(item)),
+                StringComparer.OrdinalIgnoreCase);
+
+            var recipients = new List<RecipientListItem>();
+            foreach (var email in SplitMailAddresses(value))
+            {
+                var normalized = NormalizeEmail(email);
+                if (string.IsNullOrWhiteSpace(normalized) || !seen.Add(normalized))
+                {
+                    continue;
+                }
+
+                recipients.Add(new RecipientListItem
+                {
+                    Id = 0,
+                    Email = email,
+                    NormalizedEmail = normalized,
+                    AgencyName = "수동 입력",
+                });
+            }
+
+            return recipients;
         }
 
         private void SetAllRecipientsSelected(bool selected)
@@ -1255,9 +1399,14 @@ namespace MailSender_v2
         private static IEnumerable<string> SplitMailAddresses(string value)
         {
             return (value ?? "")
-                .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(item => item.Trim())
                 .Where(item => item.Length > 0);
+        }
+
+        private static string NormalizeEmail(string value)
+        {
+            return (value ?? "").Trim().ToLowerInvariant();
         }
 
         private static bool IsValidMailAddress(string value)
