@@ -300,6 +300,13 @@ ProcessedAt = 현재 시각
 - 복사용 `MailSender_v2/config.template.json`을 추가했다.
 - README에 Supabase anon key 확인 위치를 정리했다.
 
+### 2026-07-01 Supabase API key 처리 보정
+
+- `sb_publishable_...` 형식의 Supabase publishable key를 사용할 때 `Authorization: Bearer` 헤더에 넣지 않도록 `SupabaseRestClient`를 보정했다.
+- `eyJ...`로 시작하는 legacy anon JWT key는 기존처럼 `Authorization: Bearer` 헤더를 함께 사용한다.
+- README에 legacy `anon` key와 publishable key 모두 입력 가능하되 `service_role`, `secret`, `sb_secret_...` key는 사용하지 말라는 안내를 추가했다.
+- `MailSender_v2.csproj`에 다시 들어간 `MainForm.cs`의 `<SubType>Form</SubType>`를 제거하여 코드 기반 폼 열기 오류 재발을 막았다.
+
 ## task 문서 사용 방식
 
 앞으로 명령이나 작업 추가는 `tasks/00_TEMPLATE.md` 형식을 따른다.

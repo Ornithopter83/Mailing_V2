@@ -33,11 +33,8 @@ namespace MailSender_v2.Data
             }
 
             var requestUri = $"{_settings.NormalizedUrl}/rest/v1/{tableName}?select=*&limit=0";
-            using (var request = new HttpRequestMessage(HttpMethod.Get, requestUri))
+            using (var request = CreateRequest(HttpMethod.Get, requestUri))
             {
-                request.Headers.TryAddWithoutValidation("apikey", _settings.AnonKey);
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.AnonKey);
-
                 try
                 {
                     using (var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
@@ -174,8 +171,25 @@ namespace MailSender_v2.Data
         {
             var request = new HttpRequestMessage(method, requestUri);
             request.Headers.TryAddWithoutValidation("apikey", _settings.AnonKey);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.AnonKey);
+
+            var apiKey = (_settings.AnonKey ?? "").Trim();
+            if (LooksLikeJwt(apiKey))
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            }
+
             return request;
+        }
+
+        private static bool LooksLikeJwt(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var parts = value.Split('.');
+            return parts.Length == 3 && value.StartsWith("eyJ", StringComparison.Ordinal);
         }
 
         private void EnsureConfigured()
