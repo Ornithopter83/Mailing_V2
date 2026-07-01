@@ -314,6 +314,14 @@ ProcessedAt = 현재 시각
 - 이 파일은 Designer가 아니라 코드 편집기로 여는 것이 기준이다. 시각적 Designer 편집이 필요하면 `MainForm.Designer.cs` 기반으로 UI를 별도 재구성해야 한다.
 - 그래도 Designer가 `InitializeComponent()`를 파싱하려는 경우를 대비해 `InitializeComponent()`는 제목/크기 등 단순 설정만 수행하게 만들고, 실제 UI 구성은 `BuildRuntimeLayout()`로 분리했다.
 
+### 2026-07-01 config.json 메일 작성 기본값 반영
+
+- 앱 시작 시 `config.json`을 먼저 읽고 메일 작성 화면을 구성하도록 했다.
+- `config.json`의 `Subject` 값을 제목 TextBox 초기값으로 반영한다.
+- `DefaultCc`, `DefaultBodyText` 설정을 추가하고 참조/본문 기본값에 반영한다.
+- SMTP 서버, 계정, 비밀번호, SSL, 포트, 발송 간격은 기존처럼 실제 발송 시 `config.json`에서 다시 읽어 사용한다.
+- `config.template.json`과 README 예시도 새 설정 항목에 맞게 갱신했다.
+
 ## task 문서 사용 방식
 
 앞으로 명령이나 작업 추가는 `tasks/00_TEMPLATE.md` 형식을 따른다.

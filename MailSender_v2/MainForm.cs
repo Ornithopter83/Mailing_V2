@@ -54,6 +54,7 @@ namespace MailSender_v2
 
         public MainForm()
         {
+            _settings = AppSettings.LoadOrCreate(_configPath);
             InitializeComponent();
             BuildRuntimeLayout();
         }
@@ -462,12 +463,12 @@ namespace MailSender_v2
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
 
             layout.Controls.Add(CreateLabel("제목"), 0, 0);
-            _subjectTextBox = new TextBox { Dock = DockStyle.Fill, Text = "입찰공고 안내드립니다" };
+            _subjectTextBox = new TextBox { Dock = DockStyle.Fill, Text = _settings.Subject };
             layout.Controls.Add(_subjectTextBox, 1, 0);
             layout.SetColumnSpan(layout.GetControlFromPosition(1, 0), 2);
 
             layout.Controls.Add(CreateLabel("참조"), 0, 1);
-            _ccTextBox = new TextBox { Dock = DockStyle.Fill };
+            _ccTextBox = new TextBox { Dock = DockStyle.Fill, Text = _settings.DefaultCc };
             layout.Controls.Add(_ccTextBox, 1, 1);
             layout.SetColumnSpan(layout.GetControlFromPosition(1, 1), 2);
 
@@ -536,7 +537,7 @@ namespace MailSender_v2
             _bodyTextBox = new RichTextBox
             {
                 Dock = DockStyle.Fill,
-                Text = "안녕하세요.\n\n아래와 같이 입찰공고를 안내드립니다.\n감사합니다.",
+                Text = _settings.DefaultBodyText,
                 BorderStyle = BorderStyle.FixedSingle,
             };
 
