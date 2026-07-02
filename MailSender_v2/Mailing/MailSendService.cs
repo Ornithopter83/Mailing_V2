@@ -19,7 +19,8 @@ namespace MailSender_v2.Mailing
             MailDraft draft,
             AppSettings settings,
             Action<string> log,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Action<MailSendProgressUpdate> progress = null)
         {
             if (recipients == null || recipients.Count == 0)
             {
@@ -46,6 +47,13 @@ namespace MailSender_v2.Mailing
                     var recipient = recipients[index];
                     try
                     {
+                        progress?.Invoke(new MailSendProgressUpdate
+                        {
+                            Recipient = recipient,
+                            State = MailSendProgressState.Sending,
+                            Message = "발송 중",
+                        });
+
                         using (var message = CreateMessage(recipient, draft, settings.SmtpUser))
                         {
                             log?.Invoke($"[SMTP] 발송 시작: {recipient.Email}");
@@ -53,11 +61,23 @@ namespace MailSender_v2.Mailing
                         }
 
                         results.Add(new MailSendResult { Recipient = recipient, IsSuccess = true, Message = "Sent" });
+                        progress?.Invoke(new MailSendProgressUpdate
+                        {
+                            Recipient = recipient,
+                            State = MailSendProgressState.Success,
+                            Message = "Sent",
+                        });
                         log?.Invoke($"[SMTP] 발송 성공: {recipient.Email}");
                     }
                     catch (Exception ex)
                     {
                         results.Add(new MailSendResult { Recipient = recipient, IsSuccess = false, Message = ex.Message });
+                        progress?.Invoke(new MailSendProgressUpdate
+                        {
+                            Recipient = recipient,
+                            State = MailSendProgressState.Failure,
+                            Message = ex.Message,
+                        });
                         log?.Invoke($"[SMTP] 발송 실패: {recipient.Email} - {ex.Message}");
                     }
 
@@ -133,11 +153,7 @@ namespace MailSender_v2.Mailing
                 message.CC.Add(cc);
             }
 
-            foreach (var attachmentPath in draft.AttachmentPaths.Where(File.Exists))
-            {
-                message.Attachments.Add(new Attachment(attachmentPath));
-            }
-
+            AddAttachments(message, draft.AttachmentPaths);
             AddInlineImages(message, draft.Images);
 
             return message;
@@ -151,8 +167,21 @@ namespace MailSender_v2.Mailing
             message.Subject = $"발송 결과 보고 - {draft.Subject}";
             message.Body = CreateResultReportHtml(results, draft);
             message.IsBodyHtml = true;
+            AddAttachments(message, draft.AttachmentPaths);
             AddInlineImages(message, draft.Images);
             return message;
+        }
+
+        private static void AddAttachments(MailMessage message, IEnumerable<string> attachmentPaths)
+        {
+            foreach (var attachmentPath in attachmentPaths ?? Enumerable.Empty<string>())
+            {
+                var path = ResolveRuntimePath(attachmentPath);
+                if (File.Exists(path))
+                {
+                    message.Attachments.Add(new Attachment(path));
+                }
+            }
         }
 
         private static string CreateResultReportHtml(IReadOnlyList<MailSendResult> results, MailDraft draft)

@@ -13,6 +13,7 @@ Excel 업로드 -> Supabase DB 반영 -> 발송 대상 조회 -> SMTP 발송 또
 - `MailSender_v2`: 실제 개발 대상 WinForms 애플리케이션
 - `tasks`: 작업 기준 문서와 진행 기록
 - `AGENTS.md`, `CurrentWork.md`: Codex 작업 규칙과 현재 상태
+- `PROJECT_SETUP_GUIDE.md`: 다른 PC 또는 새 Codex 스레드에서 이어받기 위한 핵심 세팅 가이드
 
 `NaraEmailSender`, `NaraInfoCollectorBot` 등 기존 사본/참조 프로젝트와 실제 운영 데이터는 공개 리포지터리에 포함하지 않습니다.
 

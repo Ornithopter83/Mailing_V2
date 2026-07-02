@@ -141,9 +141,13 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Mailing\MailDraft.cs" />
+    <Compile Include="Mailing\MailSendProgressUpdate.cs" />
     <Compile Include="Mailing\MailSendResult.cs" />
     <Compile Include="Mailing\MailSendService.cs" />
     <Compile Include="Mailing\RecipientListItem.cs" />
+    <Compile Include="MailSendProgressForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Mailing\SendHistoryDto.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

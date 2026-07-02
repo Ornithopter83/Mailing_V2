@@ -1148,25 +1148,37 @@ namespace MailSender_v2
                 _sendButton.Enabled = false;
             }
 
+            var progressForm = new MailSendProgressForm();
+            if (Icon != null)
+            {
+                progressForm.Icon = Icon;
+            }
+
+            progressForm.InitializeTargets(selected, manualRecipients);
+            progressForm.Show(this);
+            progressForm.SetCurrentStatus("발송 준비 중");
+
             try
             {
                 var service = new MailSendService();
                 var results = new List<MailSendResult>();
                 var dbResults = new List<MailSendResult>();
+                Action<MailSendProgressUpdate> progress = progressForm.UpdateProgress;
 
                 if (selected.Count > 0)
                 {
                     AppendSendLog($"[SMTP] DB 조회 대상 발송 시작: {selected.Count:N0}건");
-                    dbResults = await service.SendAsync(selected, draft, _settings, AppendSendLog, CancellationToken.None);
+                    dbResults = await service.SendAsync(selected, draft, _settings, AppendSendLog, CancellationToken.None, progress);
                     results.AddRange(dbResults);
                 }
 
                 if (manualRecipients.Count > 0)
                 {
                     AppendSendLog($"[SMTP] 수동 입력 대상 발송 시작: {manualRecipients.Count:N0}건");
-                    results.AddRange(await service.SendAsync(manualRecipients, draft, _settings, AppendSendLog, CancellationToken.None));
+                    results.AddRange(await service.SendAsync(manualRecipients, draft, _settings, AppendSendLog, CancellationToken.None, progress));
                 }
 
+                progressForm.SetCurrentStatus("발송 이력 기록 중");
                 var histories = results.Select(result => new SendHistoryDto
                 {
                     RecipientId = result.Recipient.Id > 0 ? result.Recipient.Id : (long?)null,
@@ -1193,14 +1205,17 @@ namespace MailSender_v2
                 AppendSendLog($"[SMTP] 텍스트 보고서 생성: {reportPath}");
                 if (dbResults.Count > 0)
                 {
+                    progressForm.SetCurrentStatus("발송 결과 보고 메일 전송 중");
                     await service.SendResultReportToSenderAsync(dbResults, draft, _settings, AppendSendLog, CancellationToken.None);
                 }
 
                 ClearRecipientList();
+                progressForm.MarkCompleted("발송 완료");
                 MessageBox.Show("발송 처리가 완료되었습니다.", "발송 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
+                progressForm.MarkCompleted("발송 오류");
                 AppendSendLog($"[SMTP 오류] {ex.Message}");
                 MessageBox.Show($"SMTP 발송 중 오류가 발생했습니다.\n\n{ex.Message}", "SMTP 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
