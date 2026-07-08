@@ -66,26 +66,20 @@ namespace MailSender_v2.Data
         {
             EnsureConfigured();
 
-            var requestUri = $"{_settings.NormalizedUrl}/rest/v1/{tableName}?select={Uri.EscapeDataString(columnName)}";
-            using (var request = CreateRequest(HttpMethod.Get, requestUri))
-            using (var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
+            var query = $"select={Uri.EscapeDataString(columnName)}&order={Uri.EscapeDataString(columnName)}.asc";
+            var array = await GetAllArrayAsync(tableName, query, cancellationToken).ConfigureAwait(false);
+
+            var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in array)
             {
-                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                EnsureSuccess(response, body, tableName);
-
-                var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var array = JArray.Parse(body);
-                foreach (var item in array)
+                var value = item[columnName]?.ToString();
+                if (!string.IsNullOrWhiteSpace(value))
                 {
-                    var value = item[columnName]?.ToString();
-                    if (!string.IsNullOrWhiteSpace(value))
-                    {
-                        values.Add(value.Trim().ToLowerInvariant());
-                    }
+                    values.Add(value.Trim().ToLowerInvariant());
                 }
-
-                return values;
             }
+
+            return values;
         }
 
         public async Task<JArray> GetArrayAsync(string tableName, string queryString, CancellationToken cancellationToken)
@@ -101,6 +95,47 @@ namespace MailSender_v2.Data
                 EnsureSuccess(response, body, tableName);
                 return JArray.Parse(body);
             }
+        }
+
+        public async Task<JArray> GetAllArrayAsync(
+            string tableName,
+            string queryString,
+            CancellationToken cancellationToken,
+            int pageSize = 1000)
+        {
+            EnsureConfigured();
+
+            if (pageSize <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(pageSize), "페이지 크기는 1 이상이어야 합니다.");
+            }
+
+            var result = new JArray();
+            var offset = 0;
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var pagedQuery = AppendPaging(queryString, pageSize, offset);
+
+                var page = await GetArrayAsync(tableName, pagedQuery, cancellationToken)
+                    .ConfigureAwait(false);
+
+                foreach (var item in page)
+                {
+                    result.Add(item);
+                }
+
+                if (page.Count < pageSize)
+                {
+                    break;
+                }
+
+                offset += pageSize;
+            }
+
+            return result;
         }
 
         public async Task<int> GetCountAsync(string tableName, CancellationToken cancellationToken)
@@ -132,6 +167,25 @@ namespace MailSender_v2.Data
                     return JArray.Parse(body).Count;
                 }
             }
+        }
+
+        private static string AppendPaging(string queryString, int limit, int offset)
+        {
+            var query = string.IsNullOrWhiteSpace(queryString)
+                ? ""
+                : queryString.TrimStart('?').TrimEnd('&');
+
+            var parts = query
+                .Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(part =>
+                    !part.StartsWith("limit=", StringComparison.OrdinalIgnoreCase) &&
+                    !part.StartsWith("offset=", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            parts.Add($"limit={limit}");
+            parts.Add($"offset={offset}");
+
+            return string.Join("&", parts);
         }
 
         public async Task UpsertAsync<T>(string tableName, string conflictColumn, IEnumerable<T> items, CancellationToken cancellationToken)

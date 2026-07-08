@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -33,6 +34,8 @@ namespace MailSender_v2
         private readonly Label _uploadInfoRowCountValueLabel = CreateLabel("-");
         private readonly DataGridView _recipientGrid = new DataGridView();
         private readonly List<RecipientListItem> _recipientRows = new List<RecipientListItem>();
+        private readonly DataGridView _detailGrid = new DataGridView();
+        private readonly List<DetailedRecipientRow> _detailRows = new List<DetailedRecipientRow>();
         private readonly List<string> _activityLogs = new List<string>();
         private readonly List<string> _attachmentPaths = new List<string>();
         private readonly List<MailImageSetting> _mailImages = new List<MailImageSetting>();
@@ -52,9 +55,20 @@ namespace MailSender_v2
         private RadioButton _sortDescRadio;
         private CheckBox _excludeSentCheckBox;
         private CheckBox _excludeBlockedCheckBox;
+        private TextBox _detailStartDateTextBox;
+        private TextBox _detailEndDateTextBox;
+        private CheckBox _detailUnsentCheckBox;
+        private CheckBox _detailSentCheckBox;
+        private CheckBox _detailBlockedCheckBox;
+        private NumericUpDown _detailCountNumeric;
+        private Button _detailSearchButton;
+        private Label _detailResultLabel;
+        private Label _detailSelectedLabel;
+        private CheckBox _detailExportAllCheckBox;
         private readonly string _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
         private AppSettings _settings = new AppSettings();
         private UploadProcessResult _lastUploadResult;
+        private bool _isRenderingDetailPage;
 
         public MainForm()
         {
@@ -96,6 +110,7 @@ namespace MailSender_v2
 
             tabs.TabPages.Add(CreateUploadTab());
             tabs.TabPages.Add(CreateMailTab());
+            tabs.TabPages.Add(CreateDetailTab());
 
             var statusPanel = new TableLayoutPanel
             {
@@ -721,6 +736,147 @@ namespace MailSender_v2
             return panel;
         }
 
+        private TabPage CreateDetailTab()
+        {
+            var page = new TabPage("3. 상세 조회");
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                Padding = new Padding(12),
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+
+            layout.Controls.Add(CreateDetailSearchPanel(), 0, 0);
+            layout.Controls.Add(CreateDetailGrid(), 0, 1);
+            layout.Controls.Add(CreateDetailSummaryPanel(), 0, 2);
+            layout.Controls.Add(CreateDetailActionsPanel(), 0, 3);
+
+            page.Controls.Add(layout);
+            return page;
+        }
+
+        private Control CreateDetailSearchPanel()
+        {
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Padding = new Padding(4, 8, 4, 4),
+            };
+
+            panel.Controls.Add(CreateInlineLabel("공고일자"));
+            _detailStartDateTextBox = new TextBox { Width = 90, Text = _settings.DetailSearch.NoticeDateFrom };
+            panel.Controls.Add(_detailStartDateTextBox);
+            panel.Controls.Add(CreateInlineLabel("~"));
+            _detailEndDateTextBox = new TextBox { Width = 90, Text = _settings.DetailSearch.NoticeDateTo };
+            panel.Controls.Add(_detailEndDateTextBox);
+
+            _detailUnsentCheckBox = new CheckBox { Text = "미발송", Width = 80, Checked = _settings.DetailSearch.IncludeUnsent, TextAlign = ContentAlignment.MiddleLeft };
+            _detailSentCheckBox = new CheckBox { Text = "발송완료", Width = 90, Checked = _settings.DetailSearch.IncludeSent, TextAlign = ContentAlignment.MiddleLeft };
+            _detailBlockedCheckBox = new CheckBox { Text = "차단됨", Width = 80, Checked = _settings.DetailSearch.IncludeBlocked, TextAlign = ContentAlignment.MiddleLeft };
+            panel.Controls.Add(_detailUnsentCheckBox);
+            panel.Controls.Add(_detailSentCheckBox);
+            panel.Controls.Add(_detailBlockedCheckBox);
+
+            panel.Controls.Add(CreateInlineLabel("조회 건수"));
+            _detailCountNumeric = new NumericUpDown
+            {
+                Minimum = 1,
+                Maximum = 100000,
+                Value = Math.Max(1, Math.Min(100000, _settings.DetailSearch.MaxCount)),
+                Width = 90,
+            };
+            panel.Controls.Add(_detailCountNumeric);
+
+            _detailSearchButton = new Button { Text = "검색", Width = 90, Height = 30 };
+            _detailSearchButton.Click += async (sender, args) => await LoadDetailRowsAsync();
+            panel.Controls.Add(_detailSearchButton);
+
+            return panel;
+        }
+
+        private Control CreateDetailGrid()
+        {
+            _detailGrid.Dock = DockStyle.Fill;
+            _detailGrid.AllowUserToAddRows = false;
+            _detailGrid.AllowUserToDeleteRows = false;
+            _detailGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+            _detailGrid.BackgroundColor = Color.White;
+            _detailGrid.RowHeadersVisible = false;
+            _detailGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            _detailGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "", Width = 38 });
+            AddDetailTextColumn("Id", "Id", 70);
+            AddDetailTextColumn("Email", "이메일", 180);
+            AddDetailTextColumn("NormalizedEmail", "정규화 이메일", 180);
+            AddDetailTextColumn("Agency", "기관명", 160);
+            AddDetailTextColumn("NoticeDate", "공고일자", 100);
+            AddDetailTextColumn("NoticeName", "공고명", 220);
+            AddDetailTextColumn("ManagerName", "담당자", 100);
+            AddDetailTextColumn("Phone", "연락처", 120);
+            AddDetailTextColumn("Status", "상태", 90);
+            AddDetailTextColumn("ProcessedAt", "최근 발송처리일", 150);
+            AddDetailTextColumn("BlockedReason", "차단사유", 180);
+            AddDetailTextColumn("BlockedCreatedAt", "차단등록일", 150);
+            _detailGrid.CurrentCellDirtyStateChanged += (sender, args) =>
+            {
+                if (_detailGrid.IsCurrentCellDirty)
+                {
+                    _detailGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                }
+            };
+            _detailGrid.CellValueChanged += DetailGrid_CellValueChanged;
+            return _detailGrid;
+        }
+
+        private Control CreateDetailSummaryPanel()
+        {
+            var panel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+            };
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180F));
+
+            _detailResultLabel = CreateLabel("조회 결과: 0건");
+            _detailSelectedLabel = CreateLabel("선택: 0건");
+
+            panel.Controls.Add(_detailResultLabel, 0, 0);
+            panel.Controls.Add(_detailSelectedLabel, 1, 0);
+            return panel;
+        }
+
+        private Control CreateDetailActionsPanel()
+        {
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                Padding = new Padding(0, 8, 0, 0),
+            };
+
+            var saveButton = new Button { Text = "Excel 저장", Width = 110, Height = 30 };
+            saveButton.Click += SaveDetailExcelButton_Click;
+            _detailExportAllCheckBox = new CheckBox { Text = "전체 조회 결과 저장", Width = 150, Height = 30, Checked = _settings.DetailSearch.ExportAllRows };
+            var clearButton = new Button { Text = "전체 해제", Width = 100, Height = 30 };
+            clearButton.Click += (sender, args) => SetAllDetailRowsSelected(false);
+            var selectButton = new Button { Text = "전체 선택", Width = 100, Height = 30 };
+            selectButton.Click += (sender, args) => SetAllDetailRowsSelected(true);
+
+            panel.Controls.Add(saveButton);
+            panel.Controls.Add(_detailExportAllCheckBox);
+            panel.Controls.Add(clearButton);
+            panel.Controls.Add(selectButton);
+            return panel;
+        }
+
         private static GroupBox CreateGroupBox(string text)
         {
             return new GroupBox
@@ -740,6 +896,23 @@ namespace MailSender_v2
                 TextAlign = ContentAlignment.MiddleLeft,
                 AutoSize = false,
             };
+        }
+
+        private static Label CreateInlineLabel(string text)
+        {
+            return new Label
+            {
+                Text = text,
+                AutoSize = false,
+                Width = Math.Max(36, text.Length * 12),
+                Height = 30,
+                TextAlign = ContentAlignment.MiddleLeft,
+            };
+        }
+
+        private void AddDetailTextColumn(string name, string headerText, int width)
+        {
+            _detailGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = name, HeaderText = headerText, Width = width, ReadOnly = true });
         }
 
         private void SelectExcelFileButton_Click(object sender, EventArgs e)
@@ -1613,6 +1786,227 @@ img {{ max-width: 100%; height: auto; }}
             {
                 _manualCompleteButton.Enabled = !isBusy;
             }
+        }
+
+        private async Task LoadDetailRowsAsync()
+        {
+            _settings = AppSettings.LoadOrCreate(_configPath);
+            if (!_settings.Supabase.IsConfigured)
+            {
+                MessageBox.Show("Supabase 설정이 필요합니다.", "설정 확인", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            SetDetailBusy(true);
+            try
+            {
+                if (!TryParseDetailDate(_detailStartDateTextBox.Text, "공고일자 시작일", out var startDate) ||
+                    !TryParseDetailDate(_detailEndDateTextBox.Text, "공고일자 종료일", out var endDate))
+                {
+                    return;
+                }
+
+                if (startDate.HasValue && endDate.HasValue && startDate.Value > endDate.Value)
+                {
+                    MessageBox.Show("공고일자 시작일은 종료일보다 늦을 수 없습니다.", "공고일자 확인", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var options = new DetailedRecipientSearchOptions
+                {
+                    NoticeDateFrom = startDate,
+                    NoticeDateTo = endDate,
+                    NoticeDateFromText = NormalizeDetailDateText(_detailStartDateTextBox.Text),
+                    NoticeDateToText = NormalizeDetailDateText(_detailEndDateTextBox.Text),
+                    IncludeUnsent = _detailUnsentCheckBox.Checked,
+                    IncludeSent = _detailSentCheckBox.Checked,
+                    IncludeBlocked = _detailBlockedCheckBox.Checked,
+                    MaxCount = (int)_detailCountNumeric.Value,
+                };
+
+                SaveDetailSearchSettings(options);
+                AppendSendLog("[상세조회] 조회 시작");
+                var repository = new SupabaseRecipientRepository(_settings.Supabase);
+                var rows = await repository.SearchDetailedRecipientsAsync(options, CancellationToken.None)
+                    .ConfigureAwait(true);
+
+                _detailRows.Clear();
+                _detailRows.AddRange(rows);
+                RenderDetailRows();
+                AppendSendLog($"[상세조회] 조회 완료: {rows.Count:N0}건");
+                _statusLabel.Text = $"상태: 상세 조회 완료 ({rows.Count:N0}건)";
+            }
+            catch (Exception ex)
+            {
+                AppendSendLog($"[상세조회 오류] {ex.Message}");
+                MessageBox.Show($"상세 조회 중 오류가 발생했습니다.\n\n{ex.Message}", "상세 조회 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                SetDetailBusy(false);
+            }
+        }
+
+        private void RenderDetailRows()
+        {
+            _isRenderingDetailPage = true;
+            try
+            {
+                _detailGrid.Rows.Clear();
+                foreach (var row in _detailRows)
+                {
+                    var rowIndex = _detailGrid.Rows.Add(
+                        row.IsSelected,
+                        row.Id,
+                        row.Email,
+                        row.NormalizedEmail,
+                        row.AgencyName,
+                        row.NoticeDate?.ToString("yyyy-MM-dd") ?? "",
+                        row.NoticeName,
+                        row.ManagerName,
+                        row.Phone,
+                        row.Status,
+                        row.LastProcessedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
+                        row.BlockedReason,
+                        row.BlockedCreatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "");
+                    _detailGrid.Rows[rowIndex].Tag = row;
+                }
+            }
+            finally
+            {
+                _isRenderingDetailPage = false;
+            }
+
+            UpdateDetailSummaryState();
+        }
+
+        private void DetailGrid_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            if (_isRenderingDetailPage || e.RowIndex < 0 || e.ColumnIndex != 0)
+            {
+                return;
+            }
+
+            var row = _detailGrid.Rows[e.RowIndex];
+            if (row.Tag is DetailedRecipientRow detailRow)
+            {
+                detailRow.IsSelected = row.Cells[0].Value is bool value && value;
+                UpdateDetailSummaryState();
+            }
+        }
+
+        private void SetAllDetailRowsSelected(bool selected)
+        {
+            foreach (var row in _detailRows)
+            {
+                row.IsSelected = selected;
+            }
+
+            RenderDetailRows();
+        }
+
+        private void SaveDetailExcelButton_Click(object sender, EventArgs e)
+        {
+            if (_detailRows.Count == 0)
+            {
+                MessageBox.Show("저장할 상세 조회 결과가 없습니다.", "결과 없음", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var rowsToSave = (_detailExportAllCheckBox != null && _detailExportAllCheckBox.Checked)
+                ? _detailRows.ToList()
+                : _detailRows.Where(row => row.IsSelected).ToList();
+
+            if (rowsToSave.Count == 0)
+            {
+                MessageBox.Show("저장할 행을 선택하세요. 전체 저장이 필요하면 '전체 조회 결과 저장'을 선택하세요.", "선택 없음", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Filter = "Excel Files (*.xlsx)|*.xlsx";
+                dialog.DefaultExt = "xlsx";
+                dialog.AddExtension = true;
+                dialog.FileName = $"DetailRecipients_{DateTime.Now:yyMMdd-HHmm}.xlsx";
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    SaveDetailExportSetting();
+                    DetailedRecipientExporter.SaveExcel(rowsToSave, dialog.FileName);
+                    AppendSendLog($"[상세조회] Excel 저장 완료: {rowsToSave.Count:N0}건");
+                    _statusLabel.Text = $"상태: 상세 조회 Excel 저장 완료 ({rowsToSave.Count:N0}건)";
+                    MessageBox.Show($"{rowsToSave.Count:N0}건의 상세 조회 결과를 저장했습니다.", "Excel 저장 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+        private void UpdateDetailSummaryState()
+        {
+            var selectedCount = _detailRows.Count(row => row.IsSelected);
+
+            if (_detailResultLabel != null)
+            {
+                _detailResultLabel.Text = $"조회 결과: {_detailRows.Count:N0}건";
+            }
+
+            if (_detailSelectedLabel != null)
+            {
+                _detailSelectedLabel.Text = $"선택: {selectedCount:N0}건";
+            }
+        }
+
+        private void SetDetailBusy(bool isBusy)
+        {
+            if (_detailSearchButton != null)
+            {
+                _detailSearchButton.Enabled = !isBusy;
+            }
+
+            _statusLabel.Text = isBusy ? "상태: 상세 조회 중" : _statusLabel.Text;
+        }
+
+        private void SaveDetailSearchSettings(DetailedRecipientSearchOptions options)
+        {
+            _settings.DetailSearch.NoticeDateFrom = options.NoticeDateFromText ?? "";
+            _settings.DetailSearch.NoticeDateTo = options.NoticeDateToText ?? "";
+            _settings.DetailSearch.IncludeUnsent = options.IncludeUnsent;
+            _settings.DetailSearch.IncludeSent = options.IncludeSent;
+            _settings.DetailSearch.IncludeBlocked = options.IncludeBlocked;
+            _settings.DetailSearch.MaxCount = options.MaxCount;
+            _settings.DetailSearch.ExportAllRows = _detailExportAllCheckBox != null && _detailExportAllCheckBox.Checked;
+            _settings.Save(_configPath);
+        }
+
+        private void SaveDetailExportSetting()
+        {
+            _settings.DetailSearch.ExportAllRows = _detailExportAllCheckBox != null && _detailExportAllCheckBox.Checked;
+            _settings.Save(_configPath);
+        }
+
+        private static bool TryParseDetailDate(string value, string label, out DateTime? date)
+        {
+            var text = NormalizeDetailDateText(value);
+            date = null;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return true;
+            }
+
+            DateTime parsed;
+            if (text.Length == 8 &&
+                DateTime.TryParseExact(text, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed))
+            {
+                date = parsed.Date;
+                return true;
+            }
+
+            MessageBox.Show($"{label}은 20230101 형식의 8자리 날짜로 입력하세요.", "공고일자 확인", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        private static string NormalizeDetailDateText(string value)
+        {
+            return (value ?? "").Trim();
         }
 
         private void AddAttachment(string filePath)

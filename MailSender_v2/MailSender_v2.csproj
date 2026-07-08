@@ -132,6 +132,9 @@
     <Compile Include="Config\AppSettings.cs" />
     <Compile Include="Data\DashboardSummary.cs" />
     <Compile Include="Data\DatabaseInitializer.cs" />
+    <Compile Include="Data\DetailedRecipientExporter.cs" />
+    <Compile Include="Data\DetailedRecipientRow.cs" />
+    <Compile Include="Data\DetailedRecipientSearchOptions.cs" />
     <Compile Include="Data\SupabaseConnectionCheckResult.cs" />
     <Compile Include="Data\SupabaseRestClient.cs" />
     <Compile Include="Data\SupabaseRecipientRepository.cs" />

@@ -22,6 +22,7 @@ namespace MailSender_v2.Config
         public List<string> Download { get; set; } = new List<string>();
         public int SendInterval { get; set; } = 5000;
         public int MaxCount { get; set; } = 100;
+        public DetailSearchSettings DetailSearch { get; set; } = new DetailSearchSettings();
 
         [JsonIgnore]
         public string BodyText => Body != null && Body.Count > 0
@@ -39,6 +40,7 @@ namespace MailSender_v2.Config
 
             var json = File.ReadAllText(configPath);
             var loaded = JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
+            var shouldSave = loaded.DetailSearch == null;
             loaded.Supabase = loaded.Supabase ?? new SupabaseSettings();
             loaded.SmtpUser = loaded.SmtpUser ?? "";
             loaded.SmtpPw = loaded.SmtpPw ?? "";
@@ -54,11 +56,18 @@ namespace MailSender_v2.Config
 
             loaded.Images = loaded.Images ?? new List<MailImageSetting>();
             loaded.Download = loaded.Download ?? new List<string>();
+            loaded.DetailSearch = loaded.DetailSearch ?? new DetailSearchSettings();
+            loaded.DetailSearch.ApplyDefaults();
             loaded.SendInterval = loaded.SendInterval <= 0 ? 5000 : loaded.SendInterval;
             loaded.MaxCount = loaded.MaxCount <= 0 ? 100 : loaded.MaxCount;
             if (loaded.SmtpPort <= 0)
             {
                 loaded.SmtpPort = 587;
+            }
+
+            if (shouldSave)
+            {
+                loaded.Save(configPath);
             }
 
             return loaded;
@@ -84,6 +93,24 @@ namespace MailSender_v2.Config
                 "아래와 같이 입찰공고를 안내드립니다.",
                 "감사합니다.",
             };
+        }
+    }
+
+    internal sealed class DetailSearchSettings
+    {
+        public string NoticeDateFrom { get; set; } = "";
+        public string NoticeDateTo { get; set; } = "";
+        public bool IncludeUnsent { get; set; } = true;
+        public bool IncludeSent { get; set; } = true;
+        public bool IncludeBlocked { get; set; } = true;
+        public int MaxCount { get; set; } = 1000;
+        public bool ExportAllRows { get; set; }
+
+        public void ApplyDefaults()
+        {
+            NoticeDateFrom = NoticeDateFrom ?? "";
+            NoticeDateTo = NoticeDateTo ?? "";
+            MaxCount = MaxCount <= 0 ? 1000 : MaxCount;
         }
     }
 
