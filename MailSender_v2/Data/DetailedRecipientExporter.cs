@@ -51,6 +51,7 @@ namespace MailSender_v2.Data
                 }
 
                 ws.Columns().AdjustToContents();
+                ws.Column(8).Width = 25;
                 workbook.SaveAs(path);
             }
         }
