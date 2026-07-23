@@ -6,15 +6,23 @@ create table if not exists "Recipients" (
     "Id" bigserial primary key,
     "Email" text not null,
     "NormalizedEmail" text not null unique,
+    "NoticeNumber" text,
     "AgencyName" text,
+    "DemandAgencyName" text,
     "NoticeDate" date,
     "NoticeName" text,
     "ManagerName" text,
     "Phone" text,
+    "BudgetAmount" numeric,
     "LastUploadedAt" timestamptz,
     "CreatedAt" timestamptz not null default now(),
     "UpdatedAt" timestamptz not null default now()
 );
+
+alter table "Recipients"
+    add column if not exists "NoticeNumber" text,
+    add column if not exists "DemandAgencyName" text,
+    add column if not exists "BudgetAmount" numeric;
 
 create table if not exists "UploadHistory" (
     "Id" bigserial primary key,

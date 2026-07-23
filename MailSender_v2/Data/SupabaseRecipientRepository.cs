@@ -71,7 +71,7 @@ namespace MailSender_v2.Data
             {
                 var recipients = (await client.GetAllArrayAsync(
                             "Recipients",
-                            "select=Id,Email,NormalizedEmail,AgencyName,NoticeDate,NoticeName,ManagerName,Phone&order=NoticeDate.asc",
+                            "select=Id,Email,NormalizedEmail,NoticeNumber,AgencyName,DemandAgencyName,NoticeDate,NoticeName,ManagerName,Phone,BudgetAmount&order=NoticeDate.asc",
                             cancellationToken)
                         .ConfigureAwait(false))
                     .Select(ToDetailedRecipient)
@@ -268,11 +268,14 @@ namespace MailSender_v2.Data
                 Id = token["Id"]?.Value<long>() ?? 0L,
                 Email = email,
                 NormalizedEmail = Normalize(token["NormalizedEmail"]?.ToString() ?? email),
+                NoticeNumber = token["NoticeNumber"]?.ToString(),
                 AgencyName = token["AgencyName"]?.ToString(),
+                DemandAgencyName = token["DemandAgencyName"]?.ToString(),
                 NoticeDate = DateTime.TryParse(noticeDateText, out parsedDate) ? parsedDate : (DateTime?)null,
                 NoticeName = token["NoticeName"]?.ToString(),
                 ManagerName = token["ManagerName"]?.ToString(),
                 Phone = token["Phone"]?.ToString(),
+                BudgetAmount = token["BudgetAmount"]?.Value<decimal?>(),
                 Status = "미발송",
             };
         }

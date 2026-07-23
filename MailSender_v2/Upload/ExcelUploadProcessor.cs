@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -82,11 +82,14 @@ namespace MailSender_v2.Upload
                         {
                             Email = email.Trim(),
                             NormalizedEmail = normalized,
+                            NoticeNumber = GetMappedCellText(row, headerMap, "NoticeNumber"),
                             AgencyName = GetMappedCellText(row, headerMap, "AgencyName"),
+                            DemandAgencyName = GetMappedCellText(row, headerMap, "DemandAgencyName"),
                             NoticeDate = ParseDate(GetMappedCellText(row, headerMap, "NoticeDate")),
                             NoticeName = GetMappedCellText(row, headerMap, "NoticeName"),
                             ManagerName = GetMappedCellText(row, headerMap, "ManagerName"),
                             Phone = GetMappedCellText(row, headerMap, "Phone"),
+                            BudgetAmount = ParseDecimal(GetMappedCellText(row, headerMap, "BudgetAmount")),
                             LastUploadedAt = result.UploadedAt,
                             UpdatedAt = result.UploadedAt
                         };
@@ -156,6 +159,21 @@ namespace MailSender_v2.Upload
                 return "Email";
             }
 
+            if (lower.Contains("입찰공고번호") || lower.Contains("공고번호") || lower.Contains("noticenumber") || lower.Contains("bidntceno"))
+            {
+                return "NoticeNumber";
+            }
+
+            if (lower.Contains("수요기관") || lower.Contains("demandagency") || lower.Contains("ntcedminsttnm"))
+            {
+                return "DemandAgencyName";
+            }
+
+            if (lower.Contains("공고기관") || lower.Contains("기관명") || lower == "기관" || lower.Contains("agencyname") || lower.Contains("bidntceinsttnm"))
+            {
+                return "AgencyName";
+            }
+
             if (lower.Contains("기관명") || lower.Contains("공고기관") || lower.Contains("수요기관") || lower == "기관")
             {
                 return "AgencyName";
@@ -179,6 +197,11 @@ namespace MailSender_v2.Upload
             if (lower.Contains("연락처") || lower.Contains("전화") || lower.Contains("tel") || lower.Contains("phone"))
             {
                 return "Phone";
+            }
+
+            if (lower.Contains("배정예산") || lower.Contains("추정가격") || lower.Contains("예산") || lower.Contains("budget") || lower.Contains("asignbdgtamt"))
+            {
+                return "BudgetAmount";
             }
 
             return null;
@@ -236,6 +259,31 @@ namespace MailSender_v2.Upload
             if (DateTime.TryParse(value, out var parsed))
             {
                 return parsed.Date;
+            }
+
+            return null;
+        }
+
+        private static decimal? ParseDecimal(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var normalized = value
+                .Replace(",", "")
+                .Replace("원", "")
+                .Trim();
+
+            if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return parsed;
+            }
+
+            if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out parsed))
+            {
+                return parsed;
             }
 
             return null;

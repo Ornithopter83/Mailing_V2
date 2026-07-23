@@ -17,7 +17,7 @@ namespace MailSender_v2.Config
         public string Subject { get; set; } = "입찰공고 안내드립니다";
         public string DefaultTo { get; set; } = "";
         public string DefaultCc { get; set; } = "";
-        public List<string> Body { get; set; } = CreateDefaultBodyLines();
+        public List<string> Body { get; set; } = new List<string>();
         public List<MailImageSetting> Images { get; set; } = new List<MailImageSetting>();
         public List<string> Download { get; set; } = new List<string>();
         public int SendInterval { get; set; } = 5000;
@@ -49,11 +49,6 @@ namespace MailSender_v2.Config
             loaded.DefaultTo = loaded.DefaultTo ?? "";
             loaded.DefaultCc = loaded.DefaultCc ?? "";
             loaded.Body = loaded.Body ?? new List<string>();
-            if (loaded.Body.Count == 0)
-            {
-                loaded.Body = CreateDefaultBodyLines();
-            }
-
             loaded.Images = loaded.Images ?? new List<MailImageSetting>();
             loaded.Download = loaded.Download ?? new List<string>();
             loaded.DetailSearch = loaded.DetailSearch ?? new DetailSearchSettings();
@@ -84,16 +79,6 @@ namespace MailSender_v2.Config
             File.WriteAllText(configPath, JsonConvert.SerializeObject(this, Formatting.Indented));
         }
 
-        private static List<string> CreateDefaultBodyLines()
-        {
-            return new List<string>
-            {
-                "안녕하세요.",
-                "",
-                "아래와 같이 입찰공고를 안내드립니다.",
-                "감사합니다.",
-            };
-        }
     }
 
     internal sealed class DetailSearchSettings

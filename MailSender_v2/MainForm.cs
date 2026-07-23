@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -42,6 +42,7 @@ namespace MailSender_v2
         private Button _uploadStartButton;
         private Button _saveTextButton;
         private Button _saveExcelButton;
+        private Button _refreshDashboardButton;
         private Button _resetSendHistoryButton;
         private Button _queryRecipientsButton;
         private Button _manualCompleteButton;
@@ -363,6 +364,8 @@ namespace MailSender_v2
         private GroupBox CreateUploadResultGroup()
         {
             var group = CreateGroupBox("2. 발송 현황 요약");
+            var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 0, 42) };
+
             _uploadResultGrid.Dock = DockStyle.Fill;
             _uploadResultGrid.AllowUserToAddRows = false;
             _uploadResultGrid.AllowUserToDeleteRows = false;
@@ -377,7 +380,24 @@ namespace MailSender_v2
 
             UpdateDashboardSummaryGrid(null);
 
-            group.Controls.Add(_uploadResultGrid);
+            _refreshDashboardButton = new Button
+            {
+                Text = "새로고침",
+                Width = 100,
+                Height = 30,
+                Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+            };
+            _refreshDashboardButton.Click += async (sender, args) => await RefreshDashboardSummaryAsync();
+
+            panel.Controls.Add(_uploadResultGrid);
+            panel.Controls.Add(_refreshDashboardButton);
+            panel.Resize += (sender, args) =>
+            {
+                _refreshDashboardButton.Left = panel.ClientSize.Width - _refreshDashboardButton.Width - 8;
+                _refreshDashboardButton.Top = panel.ClientSize.Height - _refreshDashboardButton.Height - 6;
+            };
+
+            group.Controls.Add(panel);
             return group;
         }
 
@@ -814,11 +834,14 @@ namespace MailSender_v2
             AddDetailTextColumn("Id", "Id", 70);
             AddDetailTextColumn("Email", "이메일", 180);
             AddDetailTextColumn("NormalizedEmail", "정규화 이메일", 180);
+            AddDetailTextColumn("NoticeNumber", "입찰공고번호", 130);
             AddDetailTextColumn("Agency", "기관명", 160);
+            AddDetailTextColumn("DemandAgency", "수요기관", 180);
             AddDetailTextColumn("NoticeDate", "공고일자", 100);
             AddDetailTextColumn("NoticeName", "공고명", 220);
             AddDetailTextColumn("ManagerName", "담당자", 100);
             AddDetailTextColumn("Phone", "연락처", 120);
+            AddDetailTextColumn("BudgetAmount", "배정예산", 110);
             AddDetailTextColumn("Status", "상태", 90);
             AddDetailTextColumn("ProcessedAt", "최근 발송처리일", 150);
             AddDetailTextColumn("BlockedReason", "차단사유", 180);
@@ -1089,6 +1112,11 @@ namespace MailSender_v2
                 _resetSendHistoryButton.Enabled = !isBusy;
             }
 
+            if (_refreshDashboardButton != null)
+            {
+                _refreshDashboardButton.Enabled = !isBusy;
+            }
+
             _statusLabel.Text = isBusy ? "상태: 업로드 처리 중" : _statusLabel.Text;
         }
 
@@ -1138,6 +1166,28 @@ namespace MailSender_v2
             {
                 UpdateDashboardSummaryGrid(null);
                 AppendUploadLog($"[발송현황 오류] {ex.Message}");
+            }
+        }
+
+        private async Task RefreshDashboardSummaryAsync()
+        {
+            if (_refreshDashboardButton != null)
+            {
+                _refreshDashboardButton.Enabled = false;
+            }
+
+            try
+            {
+                _statusLabel.Text = "상태: 발송현황 새로고침 중";
+                await LoadDashboardSummaryAsync();
+                _statusLabel.Text = "상태: 발송현황 새로고침 완료";
+            }
+            finally
+            {
+                if (_refreshDashboardButton != null)
+                {
+                    _refreshDashboardButton.Enabled = true;
+                }
             }
         }
 
@@ -1860,11 +1910,14 @@ img {{ max-width: 100%; height: auto; }}
                         row.Id,
                         row.Email,
                         row.NormalizedEmail,
+                        row.NoticeNumber,
                         row.AgencyName,
+                        row.DemandAgencyName,
                         row.NoticeDate?.ToString("yyyy-MM-dd") ?? "",
                         row.NoticeName,
                         row.ManagerName,
                         row.Phone,
+                        row.BudgetAmount?.ToString("#,##0") ?? "",
                         row.Status,
                         row.LastProcessedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
                         row.BlockedReason,
